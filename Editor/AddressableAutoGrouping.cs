@@ -3,7 +3,7 @@
  * Copyright (c) Yugo Fujioka - Unity Technologies Japan K.K.
  * 
  * Licensed under the Unity Companion License for Unity-dependent projects--see Unity Companion License.
- * 
+ * https://unity.com/legal/licenses/unity-companion-license
  * Unless expressly provided otherwise, the Software under this license is made available strictly
  * on an "AS IS" BASIS WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
  * Please review the license for details on these and other terms and conditions.
@@ -217,7 +217,7 @@ namespace UTJ
                     Debug.LogError($"Analyze build failed. {exitCode}");
                     return;
                 }
-                // 1.20以降はReflection不要
+                // NOTE: 1.20以降はReflection不要
                 //this.extractData = this.ExtractData;
                 var extractDataField = this.GetType().GetField("m_ExtractData", BindingFlags.Instance | BindingFlags.NonPublic);
                 this.ExtractData = (ExtractDataTask)extractDataField.GetValue(this);
@@ -363,7 +363,6 @@ namespace UTJ
                     sharedGroupParams.Add(shaderGroupParam);
 
                 // 単一Group振り分け
-                // NOTE: パッチを考えると既存Groupに入れない方がいいかも
                 var singleGroup = CreateSharedGroup(settings, SINGLE_GROUP_NAME);
                 var schema = singleGroup.GetSchema<BundledAssetGroupSchema>();
                 schema.BundleMode = BundledAssetGroupSchema.BundlePackingMode.PackSeparately;
@@ -400,7 +399,7 @@ namespace UTJ
                 var groupTemplate = settings.GetGroupTemplateObject(0) as AddressableAssetGroupTemplate;
                 var group = settings.CreateGroup(groupName, setAsDefaultGroup: false, readOnly: false, postEvent: false, groupTemplate.SchemaObjects);
                 var schema = group.GetSchema<BundledAssetGroupSchema>();
-                // 依存Assetなのでcatalogに登録は省略（catalog.jsonの削減）
+                // NOTE: 依存Assetなのでcatalogに登録は省略（catalog.jsonの削減）
                 schema.IncludeAddressInCatalog = false;
                 schema.IncludeGUIDInCatalog = false;
                 schema.IncludeLabelsInCatalog = false;
@@ -409,7 +408,7 @@ namespace UTJ
                 schema.InternalBundleIdMode = BundledAssetGroupSchema.BundleInternalIdMode.GroupGuid;
                 schema.InternalIdNamingMode = BundledAssetGroupSchema.AssetNamingMode.Dynamic;
                 schema.UseAssetBundleCrc = schema.UseAssetBundleCache = false;
-                schema.BundleNaming = BundledAssetGroupSchema.BundleNamingStyle.NoHash; // for debug, recommend Filename-Hash
+                schema.BundleNaming = BundledAssetGroupSchema.BundleNamingStyle.FileNameHash;
 
                 return group;
             }
@@ -433,7 +432,7 @@ namespace UTJ
 
                 foreach (var fileToBundle in this.ExtractData.WriteData.FileToBundle) {
                     if (this.ExtractData.WriteData.FileToObjects.TryGetValue(fileToBundle.Key, out var objects)) {
-                        // NOTE: 参照が全てくるので同一ファイルから複数の参照がくる＝同じGUIDの
+                        // NOTE: 参照が全てくるので同一ファイルから複数の参照がくる
                         foreach (var objectId in objects) {
                             var guid = objectId.guid;
                             var instance = ObjectIdentifier.ToObject(objectId);
@@ -457,7 +456,7 @@ namespace UTJ
                             var isSubAsset = AssetDatabase.IsSubAsset(instance);
 
                             // Resourcesの重複は警告するが許容する
-                            // 多くのプロジェクトでTextMeshProが利用されるがTextMeshProがResources前提で設計される為
+                            // NOTE: 多くのプロジェクトでTextMeshProが利用されるがTextMeshProがResources前提で設計されるので許容せざるを得ない
                             if (!this.IsPathValidForEntry(path))
                                 continue;
                             if (this.IsInResources(path))
@@ -475,9 +474,9 @@ namespace UTJ
                                     fullPath = System.IO.Path.GetFullPath(path);
                                 else
                                     fullPath = System.IO.Path.Combine(fullPath, path);
-                                
-                                // NOTE: Textureは圧縮フォーマットでサイズが著しく変わるので対応する
-                                //       AssetBundleのLZ4圧縮後の結果は流石に内容物によって変わるので無理
+
+                                // Textureは圧縮フォーマットでサイズが著しく変わるので対応する
+                                // NOTE: AssetBundleのLZ4圧縮後の結果は流石に内容物によって変わるのでビルド前チェックは無理
                                 var fileSize = 0L;
                                 if (instance is Texture)
                                     fileSize = this.GetStorageMemorySizeLong(instance as Texture);

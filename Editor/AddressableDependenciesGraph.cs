@@ -3,7 +3,7 @@
  * Copyright (c) Yugo Fujioka - Unity Technologies Japan K.K.
  * 
  * Licensed under the Unity Companion License for Unity-dependent projects--see Unity Companion License.
- * 
+ * https://unity.com/legal/licenses/unity-companion-license
  * Unless expressly provided otherwise, the Software under this license is made available strictly
  * on an "AS IS" BASIS WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
  * Please review the license for details on these and other terms and conditions.
@@ -34,7 +34,7 @@ namespace UTJ {
 
         [MenuItem("UTJ/ADDR Dependencies Graph")]
         public static void Open() {
-            var window = GetWindow<AddressableDependenciesGraph>(ObjectNames.NicifyVariableName(nameof(AddressableDependenciesGraph)));
+            var window = GetWindow<AddressableDependenciesGraph>();
             window.titleContent = new GUIContent("ADDR Dependencies Graph");
         }
 
@@ -366,8 +366,6 @@ namespace UTJ {
 
                     var rect = node.GetPosition();
 
-                    //var placed = placedNodes.Contains(bundleName);
-                    //if (!placed) {
                     if (!placedNodes.Contains(bundleName)) {
                         rect.x = position.x;
                         rect.y = position.y;
@@ -392,7 +390,7 @@ namespace UTJ {
                                 // 循環参照
                                 if (parentStack.Contains(depBundleName)) {
                                     if (this.bundleNodes.TryGetValue(depBundleName, out var depNode))
-                                        Debug.LogWarning($"循環参照 : {node.title} <-> {depNode.title} ... SpriteAtlas <-> Sprite間は無視出来ますが、Spriteの元Textureの参照は避けた方がベターです");
+                                        Debug.LogWarning($"循環参照 : {node.title} <-> {depNode.title}");
                                     continue;
                                 }
                                 if (placedNodes.Contains(depBundleName))
@@ -407,7 +405,6 @@ namespace UTJ {
 
                     parentStack.Remove(bundleName);
 
-                    //if (!placed && !addChild)
                     if (!addChild)
                         position.y += rect.height + NODE_OFFSET_V;
 
@@ -692,7 +689,7 @@ namespace UTJ {
                 // 親のエントリアセットを走査
                 foreach (var pair in parentNode.output) {
                     // ExtractData.DependencyDataからAssetの依存関係を取得
-                    // AssetDatabase.GetDependenciesでも取れるがすこぶる遅いので却下
+                    // NOTE: AssetDatabase.GetDependenciesでも取れるがすこぶる遅いので却下
                     var parentAsset = pair.Key;
                     var parentPort = pair.Value;
                     var parentGuid = new GUID(AssetDatabase.AssetPathToGUID(parentAsset));
@@ -742,7 +739,7 @@ namespace UTJ {
                                 if (!hit) {
                                     if (rule.extractData.DependencyData.AssetInfo.TryGetValue(myGuid, out var myAllAssets)) {
                                         foreach (var refAsset in myAllAssets.referencedObjects) {
-                                            // インスタンス作成するのでメモリオーバーヘッドがあるが素直にSubAsset判定した方がセーフティ
+                                            // NOTE: インスタンス作成するのでメモリオーバーヘッドがあるが素直にSubAsset判定した方がセーフティ
                                             var instance = ObjectIdentifier.ToObject(refAsset);
                                             if (!AssetDatabase.IsSubAsset(instance))
                                                 continue;
@@ -847,23 +844,6 @@ namespace UTJ {
                 }
             }
             #endregion
-
-
-            // MEMO: ノードの接続制限をかける場合に必要（output Portとoutput Portをつなげないとか）
-            // 無効にしたいがnullを返すとnull参照になる
-            //public override List<Port> GetCompatiblePorts(Port startPort, NodeAdapter nodeAdapter) {
-            //    var compatiblePorts = new List<Port>();
-            //    foreach (var port in ports.ToList()) {
-            //        if (startPort.node == port.node ||
-            //            startPort.direction == port.direction ||
-            //            startPort.portType != port.portType) {
-            //            continue;
-            //        }
-
-            //        compatiblePorts.Add(port);
-            //    }
-            //    return compatiblePorts;
-            //}
 
             // MEMO: 右クリックのコンテキストメニュー
             public override void BuildContextualMenu(ContextualMenuPopulateEvent evt) {
