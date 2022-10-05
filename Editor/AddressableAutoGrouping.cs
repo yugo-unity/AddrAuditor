@@ -176,10 +176,6 @@ namespace UTJ
                 this.GetStorageMemorySizeLong = System.Delegate.CreateDelegate(typeof(GetMemorySizeLongCallback), utilMethod) as GetMemorySizeLongCallback;
             }
 
-            bool IsInResources(string path) {
-                return path.ToLower().Contains("/resources/") || path.ToLower().StartsWith("resources/");
-            }
-
             /// <summary>
             /// SharedAssetグループの情報
             /// </summary>
@@ -459,7 +455,7 @@ namespace UTJ
                             // NOTE: 多くのプロジェクトでTextMeshProが利用されるがTextMeshProがResources前提で設計されるので許容せざるを得ない
                             if (!this.IsPathValidForEntry(path))
                                 continue;
-                            if (this.IsInResources(path))
+                            if (path.Contains("/Resources/"))
                                 Debug.LogWarning($"Resources is duplicated. - {path} / Group : {selectedGroup.name}");
 
                             if (validImplicitGuids.TryGetValue(guid, out var param)) {
