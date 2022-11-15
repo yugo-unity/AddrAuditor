@@ -548,26 +548,28 @@ namespace UTJ {
             }
             
             void AddBundleNode(DependenciesRule rule, BundleNode parentNode, string bundleName) {
-                var onlyConnnect = false;
+                var onlyConnect = false;
                 if (this.bundleNodes.TryGetValue(bundleName, out var node)) {
-                    onlyConnnect = true;
+                    onlyConnect = true;
                 } else {
                     // 新規登録
                     node = this.CreateBundleNode(bundleName, false, rule.context);
-
-                    // 接続ポート
-                    this.CreateInputPort(node, string.Empty, parentNode.bundleName);
                 }
+                // 接続ポート
+                Port input = null;
+                if (node.inputContainer.childCount == 0)
+                    input = this.CreateInputPort(node, string.Empty, parentNode.bundleName); // 新規Port作成
+                else
+                    input = node.inputContainer.ElementAt(0) as Port;
 
                 // 接続
-                var input = node.inputContainer.ElementAt(0) as Port;
                 var parentPort = parentNode.outputContainer.ElementAt(0) as Port;
                 if (rule.context.bundleToImmediateBundleDependencies.TryGetValue(parentNode.bundleName, out var depNames)) {
                     if (depNames.Contains(bundleName))
                         this.AddEdge(parentNode, parentPort, node, input);
                 }
 
-                if (onlyConnnect)
+                if (onlyConnect)
                     return;
 
                 // 依存先がある場合は作成
@@ -637,9 +639,13 @@ namespace UTJ {
                                 }
                             }
                         }
-                        node.RefreshPorts();
-                        node.RefreshExpandedState();
                     }
+                }
+
+                // 不要なPortを取り除く
+                foreach (var node in this.bundleNodes.Values) {
+                    node.RefreshPorts();
+                    node.RefreshExpandedState();
                 }
             }
             #endregion
@@ -838,6 +844,10 @@ namespace UTJ {
                                 }
                             }
                         }
+                    }
+
+                    // 不要なPortを取り除く
+                    foreach (var node in this.bundleNodes.Values) {
                         node.RefreshPorts();
                         node.RefreshExpandedState();
                     }
