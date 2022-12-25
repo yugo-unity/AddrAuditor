@@ -49,30 +49,14 @@ namespace UTJ
 
         private void OnEnable() {
             var settings = AddressableAssetSettingsDefaultObject.Settings;
-            var HELPBOX_HEIGHT = 50f;
-            var BUTTON_HEIGHT = 50f;
 
-            // Space
-            var box = new Box();
-            box.style.height = new Length(10f, LengthUnit.Pixel);
-            this.rootVisualElement.Add(box);
+            this.CreateSpace();
 
             {
-                // Info
-                var helpbox = new HelpBox(
-                        "自動生成されたグループを一括削除します\n" +
-                        "開発時やテストに使用してください,",
-                        HelpBoxMessageType.Info
-                    );
-                helpbox.style.height = new Length(HELPBOX_HEIGHT, LengthUnit.Pixel);
-                this.rootVisualElement.Add(helpbox);
+                this.CreateHelpBox("自動生成されたグループを一括削除します\n開発時やテストに使用してください");
 
                 // Remove Button
-                var removeGroupButton = new Button();
-                removeGroupButton.text = "Remove Shared Group";
-                removeGroupButton.style.height = new Length(BUTTON_HEIGHT, LengthUnit.Pixel);
-                this.rootVisualElement.Add(removeGroupButton);
-
+                var removeGroupButton = this.CreateButton("Remove Shared Group");
                 removeGroupButton.clicked += () => {
                     var deletedGroupList = new List<AddressableAssetGroup>();
                     foreach (var group in settings.groups) {
@@ -87,67 +71,73 @@ namespace UTJ
                 };
             }
 
-            // Space
-            box = new Box();
-            box.style.height = new Length(10f, LengthUnit.Pixel);
-            this.rootVisualElement.Add(box);
+            this.CreateSpace();
 
             {
-                // Info
-                var helpbox = new HelpBox(
-                        "重複アセットを解決するShared Assets Groupを作成します\n" +
-                        "エントリ済のAssetは変更されません",
-                        HelpBoxMessageType.Info
-                    );
-                helpbox.style.height = new Length(HELPBOX_HEIGHT, LengthUnit.Pixel);
-                this.rootVisualElement.Add(helpbox);
+                this.CreateHelpBox("重複アセットを解決するShared Assets Groupを作成します\nエントリ済のAssetは変更されません");
 
-                // Config
+                var fileNameToggle = new Toggle("Bundle Name is Hash");
+                fileNameToggle.name = "BundleName";
+                fileNameToggle.tooltip = "Bundleのファイル名をハッシュ値にします。開発中は無効とした方が便利です";
+                fileNameToggle.value = true;
+                this.rootVisualElement.Add(fileNameToggle);
+
                 var shaderGroupToggle = new Toggle("Shader Group");
                 shaderGroupToggle.name = "ShaderGroup";
+                shaderGroupToggle.tooltip = "Shader専用のグループを作ります。最終的にメモリに適したグルーピングを行ってください。";
                 shaderGroupToggle.value = true;
                 this.rootVisualElement.Add(shaderGroupToggle);
 
                 var thresholdField = new IntegerField("Threshold (KiB)");
                 thresholdField.name = "Threshold";
+                thresholdField.tooltip = "ファイルサイズが閾値を超える場合にSingleグループに割り振ります。0の場合は行いません。";
                 thresholdField.value = 0;
                 this.rootVisualElement.Add(thresholdField);
 
-                var createGroupButton = new Button();
-                createGroupButton.text = "Create Shared Assets Group";
-                createGroupButton.style.height = new Length(BUTTON_HEIGHT, LengthUnit.Pixel);
-                this.rootVisualElement.Add(createGroupButton);
-
+                var createGroupButton = this.CreateButton("Create Shared Assets Group");
                 createGroupButton.clicked += () => {
                     var instance = new CreateSharedAssetsGroup();
-                    instance.Execute(shaderGroupToggle.value, thresholdField.value);
+                    // 重複アセット同士の重複アセットが存在するので再帰で行う、念のため上限10回
+                    for (var i = 0; i < 10; ++i) {
+                        if (instance.Execute(fileNameToggle.value, shaderGroupToggle.value, thresholdField.value))
+                            continue;
+                        break;
+                    }
                 };
             }
 
-            // Space
-            box = new Box();
-            box.style.height = new Length(10f, LengthUnit.Pixel);
-            this.rootVisualElement.Add(box);
+            this.CreateSpace();
 
             {
-                // Info
-                var helpbox = new HelpBox(
-                        "依存アセットを全て個別bundleにします",
-                        HelpBoxMessageType.Info
-                    );
-                helpbox.style.height = new Length(HELPBOX_HEIGHT, LengthUnit.Pixel);
-                this.rootVisualElement.Add(helpbox);
+                this.CreateHelpBox("依存アセットを全て個別bundleにします\n検証に使用してください");
 
-                var implicitGroupButton = new Button();
-                implicitGroupButton.text = "Create Implicit Group (All single)";
-                implicitGroupButton.style.height = new Length(BUTTON_HEIGHT, LengthUnit.Pixel);
-                this.rootVisualElement.Add(implicitGroupButton);
-
+                var implicitGroupButton = this.CreateButton("Create Implicit Group (All single)");
                 implicitGroupButton.clicked += () => {
                     var instance = new CreateSharedAssetsGroup();
                     instance.ExecuteSingle();
                 };
             }
+        }
+
+        float HELPBOX_HEIGHT = 50f;
+        float BUTTON_HEIGHT = 50f;
+        void CreateSpace() {
+            var box = new Box();
+            box.style.height = new Length(10f, LengthUnit.Pixel);
+            this.rootVisualElement.Add(box);
+        }
+        void CreateHelpBox(string text) {
+            var helpbox = new HelpBox(text, HelpBoxMessageType.Info);
+            helpbox.style.height = new Length(HELPBOX_HEIGHT, LengthUnit.Pixel);
+            this.rootVisualElement.Add(helpbox);
+        }
+        Button CreateButton(string text) {
+            var button = new Button();
+            button.text = text;
+            button.style.height = new Length(BUTTON_HEIGHT, LengthUnit.Pixel);
+            this.rootVisualElement.Add(button);
+
+            return button;
         }
         #endregion
 
@@ -225,7 +215,7 @@ namespace UTJ
                 // Group振り分け
                 var singleGroup = settings.groups.Find(group => { return (group.name.Contains(SINGLE_GROUP_NAME)); });
                 if (singleGroup == null) {
-                    singleGroup = CreateSharedGroup(settings, SINGLE_GROUP_NAME);
+                    singleGroup = CreateSharedGroup(settings, SINGLE_GROUP_NAME, false);
                     var schema = singleGroup.GetSchema<BundledAssetGroupSchema>();
                     schema.BundleMode = BundledAssetGroupSchema.BundlePackingMode.PackSeparately;
                 }
@@ -246,9 +236,13 @@ namespace UTJ
             }
 
             /// <summary>
-            /// 実行
+            /// 重複アセット解決の実行
             /// </summary>
-            public void Execute(bool collectShader, int thresholdSingleAsset) {
+            /// <param name="bundleNameIsHash">自動生成するグループのbundle名をHashにするか</param>
+            /// <param name="collectShader">Shaderグループを作るか</param>
+            /// <param name="thresholdSingleAsset">Singleグループ行きの閾値</param>
+            /// <returns>再帰処理するか</returns>
+            public bool Execute(bool bundleNameIsHash, bool collectShader, int thresholdSingleAsset) {
                 var settings = AddressableAssetSettingsDefaultObject.Settings;
 
                 // 単品のbundleにするAssetのファイルサイズの閾値
@@ -258,14 +252,14 @@ namespace UTJ
                 ClearAnalysis();
                 if (!BuildUtility.CheckModifiedScenesAndAskToSave()) {
                     Debug.LogError("Cannot run Analyze with unsaved scenes");
-                    return;
+                    return false;
                 }
                 CalculateInputDefinitions(settings);
                 var context = GetBuildContext(settings);
                 var exitCode = RefreshBuild(context);
                 if (exitCode < ReturnCode.Success) {
                     Debug.LogError($"Analyze build failed. {exitCode}");
-                    return;
+                    return false;
                 }
                 // 1.20以降はReflection不要
                 //this.extractData = this.ExtractData;
@@ -354,12 +348,14 @@ namespace UTJ
                     }
                 }
 
+                var continued = sharedGroupParams.Count > 0;
+
                 // Shaderグループ
                 if (collectShader)
                     sharedGroupParams.Add(shaderGroupParam);
 
                 // 単一Group振り分け
-                var singleGroup = CreateSharedGroup(settings, SINGLE_GROUP_NAME);
+                var singleGroup = CreateSharedGroup(settings, SINGLE_GROUP_NAME, bundleNameIsHash);
                 var schema = singleGroup.GetSchema<BundledAssetGroupSchema>();
                 schema.BundleMode = BundledAssetGroupSchema.BundlePackingMode.PackSeparately;
                 CreateOrMoveEntry(settings, singleGroup, singleGroupParam);
@@ -371,7 +367,7 @@ namespace UTJ
 
                     if (groupParam.implicitParams.Count > 1) {
                         var name = string.Format(groupParam.name, sharedGroupCount);
-                        group = CreateSharedGroup(settings, name);
+                        group = CreateSharedGroup(settings, name, bundleNameIsHash);
                         sharedGroupCount++;
                     }
 
@@ -386,14 +382,20 @@ namespace UTJ
 
                 // 反映
                 settings.SetDirty(AddressableAssetSettings.ModificationEvent.EntryModified, eventData: null, postEvent: true, settingsModified: true);
+
+                return continued;
             }
 
             /// <summary>
             /// SharedAsset用のGroupの作成
             /// </summary>
-            static AddressableAssetGroup CreateSharedGroup(AddressableAssetSettings settings, string groupName) {
-                var groupTemplate = settings.GetGroupTemplateObject(0) as AddressableAssetGroupTemplate;
-                var group = settings.CreateGroup(groupName, setAsDefaultGroup: false, readOnly: false, postEvent: false, groupTemplate.SchemaObjects);
+            static AddressableAssetGroup CreateSharedGroup(AddressableAssetSettings settings, string groupName, bool useHashName) {
+                // Shared-SingleとShared-Shaderは単一
+                var group = settings.FindGroup(groupName);
+                if (group == null) {
+                    var groupTemplate = settings.GetGroupTemplateObject(0) as AddressableAssetGroupTemplate;
+                    group = settings.CreateGroup(groupName, setAsDefaultGroup: false, readOnly: false, postEvent: false, groupTemplate.SchemaObjects);
+                }
                 var schema = group.GetSchema<BundledAssetGroupSchema>();
                 // NOTE: 依存Assetなのでcatalogに登録は省略（catalog.jsonの削減）
                 schema.IncludeAddressInCatalog = false;
@@ -401,10 +403,14 @@ namespace UTJ
                 schema.IncludeLabelsInCatalog = false;
 
                 schema.BundleMode = BundledAssetGroupSchema.BundlePackingMode.PackTogether;
+                schema.AssetLoadMode = UnityEngine.ResourceManagement.ResourceProviders.AssetLoadMode.AllPackedAssetsAndDependencies; // for LZ4
                 schema.InternalBundleIdMode = BundledAssetGroupSchema.BundleInternalIdMode.GroupGuid;
                 schema.InternalIdNamingMode = BundledAssetGroupSchema.AssetNamingMode.Dynamic;
                 schema.UseAssetBundleCrc = schema.UseAssetBundleCache = false;
-                schema.BundleNaming = BundledAssetGroupSchema.BundleNamingStyle.FileNameHash;
+                if (useHashName)
+                    schema.BundleNaming = BundledAssetGroupSchema.BundleNamingStyle.FileNameHash;
+                else
+                    schema.BundleNaming = BundledAssetGroupSchema.BundleNamingStyle.NoHash;
 
                 return group;
             }
@@ -431,8 +437,9 @@ namespace UTJ
                         // NOTE: 参照が全てくるので同一ファイルから複数の参照がくる
                         foreach (var objectId in objects) {
                             var guid = objectId.guid;
+                            // PostProcessingVolumeやPlayableなどインスタンスがないアセットが存在
                             var instance = ObjectIdentifier.ToObject(objectId);
-                            var type = instance.GetType();
+                            var type = instance != null ? instance.GetType() : null;
 
                             // SpriteAtlasは単品チェックでバラのテクスチャが引っかからないように集めておく
                             if (atlases != null && type == typeof(SpriteAtlas))
@@ -449,7 +456,7 @@ namespace UTJ
                                 continue;
                             var selectedGroup = context.Settings.FindGroup(findGroup => findGroup.Guid == groupGUID);
                             var path = AssetDatabase.GUIDToAssetPath(guid);
-                            var isSubAsset = AssetDatabase.IsSubAsset(instance);
+                            var isSubAsset = instance != null ? AssetDatabase.IsSubAsset(instance) : false;
 
                             // Resourcesの重複は警告するが許容する
                             // NOTE: 多くのプロジェクトでTextMeshProが利用されるがTextMeshProがResources前提で設計されるので許容せざるを得ない
@@ -458,8 +465,12 @@ namespace UTJ
                             if (path.Contains("/Resources/"))
                                 Debug.LogWarning($"Resources is duplicated. - {path} / Group : {selectedGroup.name}");
 
+                            // Lightmapはシーンに依存するので無視
+                            if (path.Contains("Lightmap-"))
+                                continue;
+
                             if (validImplicitGuids.TryGetValue(guid, out var param)) {
-                                if (!param.usedType.Contains(type))
+                                if (type != null && !param.usedType.Contains(type))
                                     param.usedType.Add(type);
                                 if (!param.bundles.Contains(bundle))
                                     param.bundles.Add(bundle);

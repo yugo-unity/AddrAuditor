@@ -46,17 +46,12 @@ namespace UTJ {
         #region MAIN LAYOUT
         private void OnEnable() {
             var settings = AddressableAssetSettingsDefaultObject.Settings;
-            var HELPBOX_HEIGHT = 50f;
-            var BUTTON_HEIGHT = 50f;
 
             this.mainNode = new Node();
             this.mainNode.mainContainer.Clear();
             this.rootVisualElement.Add(mainNode);
 
-            // Space
-            var box = new Box();
-            box.style.height = new Length(10f, LengthUnit.Pixel);
-            this.mainNode.mainContainer.Add(box);
+            this.CreateSpace();
 
             // Select Group
             var groupList = settings.groups.FindAll(group => {
@@ -80,10 +75,10 @@ namespace UTJ {
             selectedEntryField.name = "SelectedEntry";
             this.mainNode.mainContainer.Add(selectedEntryField);
 
-            var enabledShaderToggle = new Toggle("Visible Shader Nodes");
-            enabledShaderToggle.name = "VisibleShaders";
-            enabledShaderToggle.value = true;
-            this.mainNode.mainContainer.Add(enabledShaderToggle);
+            // Options
+            var sharedNodeToggle = this.CreateToggle("Visible Shared Nodes", "自動生成されたSharedグループを表示します。依存関係が複雑な場合は時間がかかるので注意してください。", false);
+            var shaderNodeToggle = this.CreateToggle("Visible Shader Nodes", "自動生成されたShaderグループを表示します。Shader数が多いプロジェクトでは表示負荷が高いので注意してください", false);
+            var depthInteger = this.CreateInteger("Visible Depth", "依存関係の表示制限をかけます。Asset単位での依存関係を表示する際に便利です。0で無効となります。", 0);
 
             // Groupが変更されたらEntryのリストを更新
             selectedGroupFiled.RegisterCallback<ChangeEvent<AddressableAssetGroup>>((ev) => {
@@ -95,26 +90,13 @@ namespace UTJ {
             });
 
             // Space
-            box = new Box();
-            box.style.height = new Length(10f, LengthUnit.Pixel);
-            this.mainNode.mainContainer.Add(box);
+            this.CreateSpace();
 
             // Clear Analysis Button
             {
-                var helpbox = new HelpBox(
-                        "Analyze結果をクリアします\n" +
-                        "Group設定の変更を反映する際に必要です。",
-                        HelpBoxMessageType.Info
-                    );
-                helpbox.style.height = new Length(HELPBOX_HEIGHT, LengthUnit.Pixel);
-                this.mainNode.mainContainer.Add(helpbox);
+                this.CreateHelpBox("Analyze結果をクリアします\nGroup設定の変更を反映する際に必要です。");
 
-                var viewBundleButton = new Button();
-                viewBundleButton.text = "Clear Addressables Analysis";
-                viewBundleButton.style.height = new Length(BUTTON_HEIGHT, LengthUnit.Pixel);
-                this.mainNode.mainContainer.Add(viewBundleButton);
-
-                viewBundleButton.clicked += () => {
+                this.CreateButton("Clear Addressables Analysis").clicked += () => {
                     this.bundleRule.Clear();
                     if (this.graphView != null) {
                         this.rootVisualElement.Remove(this.graphView);
@@ -124,70 +106,94 @@ namespace UTJ {
             }
 
             // Space
-            box = new Box();
-            box.style.height = new Length(10f, LengthUnit.Pixel);
-            this.mainNode.mainContainer.Add(box);
+            this.CreateSpace();
 
             // Bundle-Dependencies Button
             {
-                var helpbox = new HelpBox(
-                        "AssetBundleの依存関係を表示します\n" +
-                        "bundleをロードする際に暗黙でロードされるbundleを確認できます。",
-                        HelpBoxMessageType.Info
-                    );
-                helpbox.style.height = new Length(HELPBOX_HEIGHT, LengthUnit.Pixel);
-                this.mainNode.mainContainer.Add(helpbox);
+                this.CreateHelpBox("AssetBundleの依存関係を表示します\nbundleをロードする際に暗黙でロードされるbundleを確認できます。");
 
-                var viewBundleButton = new Button();
-                viewBundleButton.text = "View Bundle-Dependencies";
-                viewBundleButton.style.height = new Length(BUTTON_HEIGHT, LengthUnit.Pixel);
-                this.mainNode.mainContainer.Add(viewBundleButton);
-
-                viewBundleButton.clicked += () => {
+                this.CreateButton("View Bundle-Dependencies").clicked += () => {
                     this.rootVisualElement.Remove(this.mainNode);
                     if (this.graphView != null)
                         this.rootVisualElement.Remove(this.graphView);
                     this.bundleRule.Execute();
 
                     var entry = selectedEntryField.index > 0 ? selectedEntryField.value : null;
-                    this.graphView = new BundlesGraph(BundlesGraph.TYPE.BUNDLE_DEPENDENCE, selectedGroupFiled.value, entry, enabledShaderToggle.value, this.bundleRule);
+                    this.graphView = new BundlesGraph(BundlesGraph.TYPE.BUNDLE_DEPENDENCE,
+                                                      selectedGroupFiled.value,
+                                                      entry,
+                                                      shaderNodeToggle.value,
+                                                      sharedNodeToggle.value,
+                                                      depthInteger.value,
+                                                      this.bundleRule);
                     this.rootVisualElement.Add(this.graphView);
                     this.rootVisualElement.Add(this.mainNode);
                 };
             }
 
             // Space
-            box = new Box();
-            box.style.height = new Length(10f, LengthUnit.Pixel);
-            this.mainNode.mainContainer.Add(box);
+            this.CreateSpace();
 
             // Asset-Dependencies Button
             {
-                var helpbox = new HelpBox(
-                        "AssetBundleに含まれるAssetの依存関係を表示します\n" +
-                        "意図しない参照を見つけることができます。",
-                        HelpBoxMessageType.Info
-                    );
-                helpbox.style.height = new Length(HELPBOX_HEIGHT, LengthUnit.Pixel);
-                this.mainNode.mainContainer.Add(helpbox);
+                this.CreateHelpBox("AssetBundleに含まれるAssetの依存関係を表示します\n意図しない参照を見つけることができます。");
 
-                var viewAssetButton = new Button();
-                viewAssetButton.text = "View Asset-Dependencies";
-                viewAssetButton.style.height = new Length(BUTTON_HEIGHT, LengthUnit.Pixel);
-                this.mainNode.mainContainer.Add(viewAssetButton);
-
-                viewAssetButton.clicked += () => {
+                this.CreateButton("View Asset-Dependencies").clicked += () => {
                     this.rootVisualElement.Remove(this.mainNode);
                     if (this.graphView != null)
                         this.rootVisualElement.Remove(this.graphView);
                     this.bundleRule.Execute();
 
                     var entry = selectedEntryField.index > 0 ? selectedEntryField.value : null;
-                    this.graphView = new BundlesGraph(BundlesGraph.TYPE.ASSET_DEPENDENCE, selectedGroupFiled.value, entry, enabledShaderToggle.value, this.bundleRule);
+                    this.graphView = new BundlesGraph(BundlesGraph.TYPE.ASSET_DEPENDENCE,
+                                                      selectedGroupFiled.value,
+                                                      entry,
+                                                      shaderNodeToggle.value,
+                                                      sharedNodeToggle.value,
+                                                      depthInteger.value,
+                                                      this.bundleRule);
                     this.rootVisualElement.Add(this.graphView);
                     this.rootVisualElement.Add(this.mainNode);
                 };
             }
+        }
+
+        float HELPBOX_HEIGHT = 50f;
+        float BUTTON_HEIGHT = 50f;
+        void CreateHelpBox(string text) {
+            var helpbox = new HelpBox(text, HelpBoxMessageType.Info);
+            helpbox.style.height = new Length(HELPBOX_HEIGHT, LengthUnit.Pixel);
+            this.mainNode.mainContainer.Add(helpbox);
+        }
+        void CreateSpace() {
+            var box = new Box();
+            box.style.height = new Length(10f, LengthUnit.Pixel);
+            this.mainNode.mainContainer.Add(box);
+        }
+        Button CreateButton(string text) {
+            var button = new Button();
+            button.text = text;
+            button.style.height = new Length(BUTTON_HEIGHT, LengthUnit.Pixel);
+            this.mainNode.mainContainer.Add(button);
+
+            return button;
+        }
+        Toggle CreateToggle(string title, string tooltip, bool defaultValue) {
+            var toggle = new Toggle(title);
+            toggle.name = title;
+            toggle.tooltip = tooltip;
+            toggle.value = defaultValue;
+            this.mainNode.mainContainer.Add(toggle);
+
+            return toggle;
+        }
+        IntegerField CreateInteger(string title, string tooltip, int defaultValue) {
+            var integer = new IntegerField(title);
+            integer.name = title;
+            integer.tooltip = tooltip;
+            integer.value = defaultValue;
+            this.mainNode.mainContainer.Add(integer);
+            return integer;
         }
         #endregion
 
@@ -312,7 +318,7 @@ namespace UTJ {
             private const float NODE_OFFSET_H = 140f;
             private const float NODE_OFFSET_V = 20f;
 
-            private BundleNode shaderNode, builtinNode;
+            //private BundleNode shaderNode, builtinNode;
             private List<FlowingEdge> allEdges = new List<FlowingEdge>();
             private Dictionary<string, BundleNode> bundleNodes = new Dictionary<string, BundleNode>();
             private List<string> explicitNodes = new List<string>();
@@ -320,13 +326,13 @@ namespace UTJ {
             /// <summary>
             /// Bundleの全依存関係
             /// </summary>
-            public BundlesGraph(TYPE type, AddressableAssetGroup group, AddressableAssetEntry entry, bool enabledShaderNode, DependenciesRule rule) {
+            public BundlesGraph(TYPE type, AddressableAssetGroup group, AddressableAssetEntry entry, bool enabledShaderNode, bool enabledSharedNode, int visibleDepth, DependenciesRule rule) {
                 switch (type) {
                     case TYPE.BUNDLE_DEPENDENCE:
-                        this.ViewBundles(rule, group, entry);
+                        this.ViewBundles(rule, group, entry, enabledSharedNode);
                         break;
                     case TYPE.ASSET_DEPENDENCE:
-                        this.ViewEntries(rule, group, entry);
+                        this.ViewEntries(rule, group, entry, enabledSharedNode);
                         break;
                 }
                 // NOTE: レイアウトが一旦完了しないとノードサイズがとれないのでViewの描画前コールバックに仕込む
@@ -336,7 +342,7 @@ namespace UTJ {
                     var parentStack = new HashSet<string>(); // 親ノード
                     var placedNames = new HashSet<string>(); // 整列済みノード
                     foreach (var bundleName in this.explicitNodes)
-                        position = this.AlignNode(rule.context, bundleName, parentStack, placedNames, enabledShaderNode, position);
+                        position = this.AlignNode(rule.context, bundleName, parentStack, placedNames, enabledShaderNode, visibleDepth, position);
                 });
 
                 this.StretchToParentSize(); // 親のサイズに合わせてGraphViewのサイズを設定
@@ -346,15 +352,23 @@ namespace UTJ {
                 this.AddManipulator(new RectangleSelector());   // 範囲ノード選択
             }
 
+            bool IsShaderGroupNode(BundleNode node) {
+                return node.title.Contains(AddressablesAutoGrouping.SHADER_GROUP_NAME);
+            }
+            bool IsBuiltInShaderNode(BundleNode node) {
+                return node.bundleName.Contains(UNITY_BUILTIN_SHADERS);
+            }
+
 
             #region PRIVATE FUNCTION
             /// <summary>
             /// ノード整列
             /// </summary>
-            private Vector2 AlignNode(AddressableAssetsBuildContext context, string bundleName, HashSet<string> parentStack, HashSet<string> placedNodes, bool enabledShaderNode, Vector2 position) {
+            private Vector2 AlignNode(AddressableAssetsBuildContext context, string bundleName, HashSet<string> parentStack, HashSet<string> placedNodes, bool enabledShaderNode, int visibleDepth, Vector2 position) {
                 if (this.bundleNodes.TryGetValue(bundleName, out var node)) {
                     if (!enabledShaderNode) {
-                        if (node == this.shaderNode || node == this.builtinNode) {
+                        //if (node.title == this.shaderNode || node == this.builtinNode) {
+                        if (this.IsShaderGroupNode(node) || this.IsBuiltInShaderNode(node)) {
                             node.visible = false;
                             foreach (var edgeList in node.edgeFrom.Values) {
                                 foreach (var edge in edgeList)
@@ -373,42 +387,54 @@ namespace UTJ {
                         placedNodes.Add(bundleName);
                     }
 
-                    parentStack.Add(bundleName);
-
                     var addChild = false;
-                    if (context.bundleToImmediateBundleDependencies.TryGetValue(bundleName, out var depBundleNames)) {
-                        // アルファベット順にソート
-                        depBundleNames.Sort(CompareGroup);
+                    // 表示深度制限
+                    if (visibleDepth > 0 && parentStack.Count > visibleDepth) {
+                        node.visible = false;
+                        foreach (var edgeList in node.edgeFrom.Values) {
+                            foreach (var edge in edgeList)
+                                edge.visible = false;
+                        }
+                        foreach (var edgeList in node.edgeTo.Values) {
+                            foreach (var edge in edgeList)
+                                edge.visible = false;
+                        }
+                    } else {
+                        parentStack.Add(bundleName);
 
-                        if (depBundleNames.Count > 1) {
-                            var pos = position;
-                            pos.x += rect.width + NODE_OFFSET_H;
-                            foreach (var depBundleName in depBundleNames) {
-                                // 自身は無視
-                                if (depBundleName == bundleName)
-                                    continue;
-                                // 循環参照
-                                if (parentStack.Contains(depBundleName)) {
-                                    if (this.bundleNodes.TryGetValue(depBundleName, out var depNode))
-                                        Debug.LogWarning($"循環参照 : {node.title} <-> {depNode.title}");
-                                    continue;
+                        if (context.bundleToImmediateBundleDependencies.TryGetValue(bundleName, out var depBundleNames)) {
+                            // アルファベット順にソート
+                            depBundleNames.Sort(CompareGroup);
+
+                            if (depBundleNames.Count > 1) {
+                                var pos = position;
+                                pos.x += rect.width + NODE_OFFSET_H;
+                                foreach (var depBundleName in depBundleNames) {
+                                    // 自身は無視
+                                    if (depBundleName == bundleName)
+                                        continue;
+                                    // 循環参照
+                                    if (parentStack.Contains(depBundleName)) {
+                                        if (this.bundleNodes.TryGetValue(depBundleName, out var depNode))
+                                            Debug.LogWarning($"循環参照 : {node.title} <-> {depNode.title}");
+                                        continue;
+                                    }
+                                    if (placedNodes.Contains(depBundleName))
+                                        continue;
+
+                                    pos = this.AlignNode(context, depBundleName, parentStack, placedNodes, enabledShaderNode, visibleDepth, pos);
+                                    position.y = pos.y;
+                                    addChild = true;
                                 }
-                                if (placedNodes.Contains(depBundleName))
-                                    continue;
-
-                                pos = this.AlignNode(context, depBundleName, parentStack, placedNodes, enabledShaderNode, pos);
-                                position.y = pos.y;
-                                addChild = true;
                             }
                         }
+
+                        parentStack.Remove(bundleName);
+
+                        if (!addChild)
+                            position.y += rect.height + NODE_OFFSET_V;
+                        position.y = Mathf.Max(position.y, rect.y + rect.height + NODE_OFFSET_V);
                     }
-
-                    parentStack.Remove(bundleName);
-
-                    if (!addChild)
-                        position.y += rect.height + NODE_OFFSET_V;
-
-                    position.y = Mathf.Max(position.y, rect.y + rect.height + NODE_OFFSET_V);
                 }
 
                 return position;
@@ -419,31 +445,49 @@ namespace UTJ {
             /// </summary>
             /// <param name="bundleName">AssetBundle名</param>
             /// <param name="isExplicit">明示的に呼ばれる（カタログに追加されている）グループか</param>
-            private BundleNode CreateBundleNode(string bundleName, bool isExplicit, AddressableAssetsBuildContext context) {
+            /// <param name="createSharedNode">Sharedノード有効か</param>
+            private BundleNode CreateBundleNode(AddressableAssetsBuildContext context, string bundleName, bool isExplicit, bool createSharedNode) {
                 if (this.bundleNodes.TryGetValue(bundleName, out var node)) {
                     Debug.LogWarning($"Exist the same bundleName for Nodes : {bundleName}");
                     return node;
                 }
 
-                node = new BundleNode();
-                node.name = node.bundleName = bundleName;
-
+                var title = string.Empty;
+                //var isBuiltIn = false;
+                //var isShaderNode = false; // Shader
                 // ノード名
                 if (bundleName.Contains(UNITY_BUILTIN_SHADERS)) {
-                    node.title = "Unity Built-in Shaders";
-                    this.builtinNode = node;
+                    title = "Unity Built-in Shaders";
+                    //isBuiltIn = true;
                 } else {
                     // Hashを取り除いてグループ名と結合
                     var temp = System.IO.Path.GetFileName(bundleName).Split(new string[] { "_assets_", "_scenes_" }, System.StringSplitOptions.None);
-                    node.title = temp[temp.Length - 1];
+                    title = temp[temp.Length - 1];
                     if (context.bundleToAssetGroup.TryGetValue(bundleName, out var groupGUID)) {
                         var groupName = context.Settings.FindGroup(findGroup => findGroup != null && findGroup.Guid == groupGUID).name;
-                        node.title = $"{groupName}/{node.title}";
+                        title = $"{groupName}/{title}";
 
-                        if (this.shaderNode == null && groupName == AddressablesAutoGrouping.SHADER_GROUP_NAME)
-                            this.shaderNode = node;
+                        //isShaderNode = (this.shaderNode == null && groupName == AddressablesAutoGrouping.SHADER_GROUP_NAME);
                     }
                 }
+
+                // プロジェクト規模が大きくなると表示しきれないので表示量を減らす為の措置
+                if (!isExplicit) {
+                    // 常駐無視 TODO: 常駐指定名
+                    if (title.Contains("System_") || title.Contains("System/") || title.Contains("Default Local Group"))
+                        return null;
+                    // 依存グループ無視
+                    if (!createSharedNode && title.Contains("Shared-"))
+                        return null;
+                }
+
+                node = new BundleNode();
+                node.title = title;
+                node.name = node.bundleName = bundleName;
+                //if (isBuiltIn)
+                //    this.builtinNode = node;
+                //if (isShaderNode)
+                //    this.shaderNode = node;
 
                 // 明示的なノードは黄色
                 if (isExplicit)
@@ -547,14 +591,18 @@ namespace UTJ {
                 node.output.Add(node.bundleName, output);
             }
             
-            void AddBundleNode(DependenciesRule rule, BundleNode parentNode, string bundleName) {
+            void AddBundleNode(DependenciesRule rule, BundleNode parentNode, string bundleName, bool enabledSharedNode) {
                 var onlyConnect = false;
                 if (this.bundleNodes.TryGetValue(bundleName, out var node)) {
                     onlyConnect = true;
                 } else {
                     // 新規登録
-                    node = this.CreateBundleNode(bundleName, false, rule.context);
+                    node = this.CreateBundleNode(rule.context, bundleName, false, enabledSharedNode);
+                    // 無視されるノードの場合はnull
+                    if (node == null)
+                        return;
                 }
+
                 // 接続ポート
                 Port input = null;
                 if (node.inputContainer.childCount == 0)
@@ -589,7 +637,7 @@ namespace UTJ {
                             if (bundleName == depBundleName)
                                 continue;
 
-                            this.AddBundleNode(rule, node, depBundleName);
+                            this.AddBundleNode(rule, node, depBundleName, enabledSharedNode);
                         }
                     }
                 }
@@ -598,7 +646,7 @@ namespace UTJ {
                 node.RefreshExpandedState();
             }
 
-            void ViewBundles(DependenciesRule rule, AddressableAssetGroup group, AddressableAssetEntry entry) {
+            void ViewBundles(DependenciesRule rule, AddressableAssetGroup group, AddressableAssetEntry entry, bool enabledSharedNode) {
                 this.bundleNodes.Clear();
                 var context = rule.context;
 
@@ -621,7 +669,7 @@ namespace UTJ {
                                 continue;
                         }
 
-                        var node = this.CreateBundleNode(bundleName, true, context);
+                        var node = this.CreateBundleNode(context, bundleName, true, true);
                         this.explicitNodes.Add(bundleName);
 
                         // implicitノード作成
@@ -635,7 +683,7 @@ namespace UTJ {
                                     if (bundleName == depBundleName)
                                         continue;
 
-                                    this.AddBundleNode(rule, node, depBundleName);
+                                    this.AddBundleNode(rule, node, depBundleName, enabledSharedNode);
                                 }
                             }
                         }
@@ -679,14 +727,17 @@ namespace UTJ {
                 node.outputContainer.Sort(CompareGroup);
             }
 
-            int AddEntriesNode(DependenciesRule rule, BundleNode parentNode, string bundleName) {
+            int AddEntriesNode(DependenciesRule rule, BundleNode parentNode, string bundleName, bool enabledSharedNode) {
                 var onlyConnect = false;
 
                 if (this.bundleNodes.TryGetValue(bundleName, out var node)) {
                     onlyConnect = true;
                 } else {
                     // 新規登録
-                    node = this.CreateBundleNode(bundleName, false, rule.context);
+                    node = this.CreateBundleNode(rule.context, bundleName, false, enabledSharedNode);
+                    // 無視されるノードの場合はnull
+                    if (node == null)
+                        return 0;
 
                     // 内容物表示
                     this.CreateOutputPortsWithAssets(rule, node);
@@ -747,7 +798,7 @@ namespace UTJ {
                                         foreach (var refAsset in myAllAssets.referencedObjects) {
                                             // NOTE: インスタンス作成するのでメモリオーバーヘッドがあるが素直にSubAsset判定した方がセーフティ
                                             var instance = ObjectIdentifier.ToObject(refAsset);
-                                            if (!AssetDatabase.IsSubAsset(instance))
+                                            if (instance == null || !AssetDatabase.IsSubAsset(instance))
                                                 continue;
                                             if (parentObj == refAsset) {
                                                 hit = true;
@@ -790,7 +841,7 @@ namespace UTJ {
                             if (bundleName == depBundleName)
                                 continue;
 
-                            totalDepCount += this.AddEntriesNode(rule, node, depBundleName);
+                            totalDepCount += this.AddEntriesNode(rule, node, depBundleName, enabledSharedNode);
                         }
                     }
                 }
@@ -799,7 +850,7 @@ namespace UTJ {
                 return totalDepCount;
             }
 
-            void ViewEntries(DependenciesRule rule, AddressableAssetGroup group, AddressableAssetEntry entry) {
+            void ViewEntries(DependenciesRule rule, AddressableAssetGroup group, AddressableAssetEntry entry, bool enabledSharedNode) {
                 this.bundleNodes.Clear();
                 var context = rule.context;
 
@@ -823,7 +874,7 @@ namespace UTJ {
                         }
 
                         // explicitノード作成
-                        var node = this.CreateBundleNode(bundleName, true, rule.context);
+                        var node = this.CreateBundleNode(rule.context, bundleName, true, enabledSharedNode);
                         this.explicitNodes.Add(bundleName);
 
                         // 内容物表示
@@ -839,7 +890,7 @@ namespace UTJ {
                                     if (bundleName == depBundleName)
                                         continue;
 
-                                    var depCount = this.AddEntriesNode(rule, node, depBundleName);
+                                    var depCount = this.AddEntriesNode(rule, node, depBundleName, enabledSharedNode);
                                     totalDepth += depCount;
                                 }
                             }
