@@ -1,5 +1,6 @@
-using UnityEngine;
 using UnityEditor;
+using UnityEditor.UIElements;
+using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEditor.Experimental.GraphView;
 using System.Reflection;
@@ -168,5 +169,46 @@ namespace UTJ {
                 this.selectedColorField.SetValue(this, Color.green);
         }
         #endregion
+    }
+
+    public static class AddrUtility {
+        const float HELPBOX_HEIGHT = 50f;
+        const float BUTTON_HEIGHT = 50f;
+
+        public static void CreateHelpBox(VisualElement root, string text) {
+            var helpbox = new HelpBox(text, HelpBoxMessageType.Info);
+            helpbox.style.height = new Length(HELPBOX_HEIGHT, LengthUnit.Pixel);
+            root.Add(helpbox);
+        }
+        public static void CreateSpace(VisualElement root) {
+            var box = new Box();
+            box.style.height = new Length(10f, LengthUnit.Pixel);
+            root.Add(box);
+        }
+        public static Button CreateButton(VisualElement root, string text) {
+            var button = new Button();
+            button.text = text;
+            button.style.height = new Length(BUTTON_HEIGHT, LengthUnit.Pixel);
+            root.Add(button);
+
+            return button;
+        }
+        public static Toggle CreateToggle(VisualElement root, string title, string tooltip, bool defaultValue) {
+            var toggle = new Toggle(title);
+            toggle.name = title;
+            toggle.tooltip = tooltip;
+            toggle.value = defaultValue;
+            root.Add(toggle);
+
+            return toggle;
+        }
+        public static IntegerField CreateInteger(VisualElement root, string title, string tooltip, int defaultValue) {
+            var integer = new IntegerField(title);
+            integer.name = title;
+            integer.tooltip = tooltip;
+            integer.value = defaultValue;
+            root.Add(integer);
+            return integer;
+        }
     }
 }

@@ -21,9 +21,7 @@ using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.AddressableAssets.Settings.GroupSchemas;
 using UnityEditor.Build.Content;
 using UnityEditor.Build.Pipeline;
-using UnityEditor.UIElements;
 using UnityEngine;
-using UnityEngine.UIElements;
 using UnityEngine.U2D;
 
 namespace UTJ
@@ -34,6 +32,8 @@ namespace UTJ
         public const string SHARED_GROUP_NAME = "Shared-";
         public const string SHADER_GROUP_NAME = "Shared-Shader";
         public const string SINGLE_GROUP_NAME = "Shared-Single";
+
+        readonly static string SETTINGS_PATH = "Assets/AddressableGroupingSettings.asset";
         #endregion
 
 
@@ -41,22 +41,33 @@ namespace UTJ
         [MenuItem("UTJ/ADDR Auto-Grouping Window")]
         private static void OpenWindow() {
             var window = GetWindow<AddressablesAutoGrouping>();
-            window.titleContent = new GUIContent("ADDR Auto-Grouping");
-            var rect = window.position;
-            rect.size = new Vector2(400f, 400f);
-            window.position = rect;
         }
 
         private void OnEnable() {
+            this.titleContent = new GUIContent("ADDR Auto-Grouping");
+            var rect = this.position;
+            rect.size = new Vector2(400f, 400f);
+            this.position = rect;
+
+            // 設定ファイル
+            var grouping = AssetDatabase.LoadAssetAtPath<ScriptableObject>(SETTINGS_PATH) as AddressableGroupingSettings;
+            if (grouping == null) {
+                var obj = ScriptableObject.CreateInstance("AddressableGroupingSettings");
+                AssetDatabase.CreateAsset(obj, SETTINGS_PATH);
+                grouping = obj as AddressableGroupingSettings;
+            }
+
             var settings = AddressableAssetSettingsDefaultObject.Settings;
 
-            this.CreateSpace();
+            var mainElement = this.rootVisualElement;
+
+            AddrUtility.CreateSpace(mainElement);
 
             {
-                this.CreateHelpBox("自動生成されたグループを一括削除します\n開発時やテストに使用してください");
+                AddrUtility.CreateHelpBox(mainElement, "自動生成されたグループを一括削除します\n開発時やテストに使用してください");
 
                 // Remove Button
-                var removeGroupButton = this.CreateButton("Remove Shared Group");
+                var removeGroupButton = AddrUtility.CreateButton(mainElement, "Remove Shared Group");
                 removeGroupButton.clicked += () => {
                     var deletedGroupList = new List<AddressableAssetGroup>();
                     foreach (var group in settings.groups) {
@@ -71,31 +82,31 @@ namespace UTJ
                 };
             }
 
-            this.CreateSpace();
+            AddrUtility.CreateSpace(mainElement);
 
             {
-                this.CreateHelpBox("重複アセットを解決するShared Assets Groupを作成します\nエントリ済のAssetは変更されません");
+                AddrUtility.CreateHelpBox(mainElement, "重複アセットを解決するShared Assets Groupを作成します\nエントリ済のAssetは変更されません");
 
-                var fileNameToggle = new Toggle("Bundle Name is Hash");
-                fileNameToggle.name = "BundleName";
-                fileNameToggle.tooltip = "Bundleのファイル名をハッシュ値にします。開発中は無効とした方が便利です";
-                fileNameToggle.value = true;
-                this.rootVisualElement.Add(fileNameToggle);
+                var fileNameToggle = AddrUtility.CreateToggle(mainElement,
+                    "Bundle Name is Hash",
+                    "Bundleのファイル名をハッシュ値にします。開発中は無効とした方が便利です。",
+                    grouping.hashName);
+                var shaderGroupToggle = AddrUtility.CreateToggle(mainElement,
+                    "Shader Group",
+                    "Shader専用のグループを作ります。最終的にメモリに適したグルーピングを行ってください。",
+                    grouping.shaderGroup);
+                var thresholdField = AddrUtility.CreateInteger(mainElement,
+                    "Threshold (KiB)",
+                    "ファイルサイズが閾値を超える場合にSingleグループに割り振ります。0の場合は行いません。LZ4圧縮された後のサイズではないので検証目的で使用してください。",
+                    grouping.singleThreshold);
 
-                var shaderGroupToggle = new Toggle("Shader Group");
-                shaderGroupToggle.name = "ShaderGroup";
-                shaderGroupToggle.tooltip = "Shader専用のグループを作ります。最終的にメモリに適したグルーピングを行ってください。";
-                shaderGroupToggle.value = true;
-                this.rootVisualElement.Add(shaderGroupToggle);
-
-                var thresholdField = new IntegerField("Threshold (KiB)");
-                thresholdField.name = "Threshold";
-                thresholdField.tooltip = "ファイルサイズが閾値を超える場合にSingleグループに割り振ります。0の場合は行いません。";
-                thresholdField.value = 0;
-                this.rootVisualElement.Add(thresholdField);
-
-                var createGroupButton = this.CreateButton("Create Shared Assets Group");
+                var createGroupButton = AddrUtility.CreateButton(mainElement, "Create Shared Assets Group");
                 createGroupButton.clicked += () => {
+                    // 実行したら設定ファイル保存
+                    grouping.hashName = fileNameToggle.value;
+                    grouping.shaderGroup = shaderGroupToggle.value;
+                    grouping.singleThreshold = thresholdField.value;
+
                     var instance = new CreateSharedAssetsGroup();
                     // 重複アセット同士の重複アセットが存在するので再帰で行う、念のため上限10回
                     for (var i = 0; i < 10; ++i) {
@@ -106,38 +117,17 @@ namespace UTJ
                 };
             }
 
-            this.CreateSpace();
+            AddrUtility.CreateSpace(mainElement);
 
             {
-                this.CreateHelpBox("依存アセットを全て個別bundleにします\n検証に使用してください");
+                AddrUtility.CreateHelpBox(mainElement, "依存アセットを全て個別bundleにします\n検証に使用してください");
 
-                var implicitGroupButton = this.CreateButton("Create Implicit Group (All single)");
+                var implicitGroupButton = AddrUtility.CreateButton(mainElement, "Create Implicit Group (All single)");
                 implicitGroupButton.clicked += () => {
                     var instance = new CreateSharedAssetsGroup();
                     instance.ExecuteSingle();
                 };
             }
-        }
-
-        float HELPBOX_HEIGHT = 50f;
-        float BUTTON_HEIGHT = 50f;
-        void CreateSpace() {
-            var box = new Box();
-            box.style.height = new Length(10f, LengthUnit.Pixel);
-            this.rootVisualElement.Add(box);
-        }
-        void CreateHelpBox(string text) {
-            var helpbox = new HelpBox(text, HelpBoxMessageType.Info);
-            helpbox.style.height = new Length(HELPBOX_HEIGHT, LengthUnit.Pixel);
-            this.rootVisualElement.Add(helpbox);
-        }
-        Button CreateButton(string text) {
-            var button = new Button();
-            button.text = text;
-            button.style.height = new Length(BUTTON_HEIGHT, LengthUnit.Pixel);
-            this.rootVisualElement.Add(button);
-
-            return button;
         }
         #endregion
 
