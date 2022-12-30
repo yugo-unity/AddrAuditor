@@ -210,5 +210,13 @@ namespace UTJ {
             root.Add(integer);
             return integer;
         }
+        public static SliderInt CreateSliderInt(VisualElement root, string title, string tooltip, int defaultValue, int min, int max) {
+            var integer = new SliderInt(title, min, max);
+            integer.name = title;
+            integer.tooltip = tooltip;
+            integer.value = defaultValue;
+            root.Add(integer);
+            return integer;
+        }
     }
 }

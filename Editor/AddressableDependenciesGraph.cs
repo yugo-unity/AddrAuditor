@@ -45,6 +45,7 @@ namespace UTJ {
         public class IgnorePrefix {
             public string text;
         }
+        [SerializeField]
         private List<IgnorePrefix> ignorePrefixList = new List<IgnorePrefix>();
 
 
@@ -93,10 +94,28 @@ namespace UTJ {
                 "Visible Shader Nodes",
                 "自動生成されたShaderグループを表示します。Shader数が多いプロジェクトでは表示負荷が高いので注意してください",
                 false);
-            var depthInteger = AddrUtility.CreateInteger(mainBox,
+            var depthRoot = new VisualElement();
+            depthRoot.style.flexDirection = FlexDirection.Row;
+            depthRoot.style.justifyContent = Justify.SpaceBetween;
+            depthRoot.style.alignItems = Align.Center;
+            mainBox.Add(depthRoot);
+            var depthSlider = AddrUtility.CreateSliderInt(depthRoot,
                 "Visible Depth",
                 "依存関係の表示制限をかけます。Asset単位での依存関係を表示する際に便利です。0で無効となります。",
-                0);
+                1, 0, 3);
+            depthSlider.style.width = 100f;
+            var depthInteger = AddrUtility.CreateInteger(depthRoot,
+                string.Empty, string.Empty,
+                1);
+            depthInteger.style.width = 30f;
+            depthInteger.RegisterValueChangedCallback((ev) => {
+                var val = Mathf.Clamp(ev.newValue, 0, 3);
+                depthInteger.value = val;
+                depthSlider.SetValueWithoutNotify(val);
+            });
+            depthSlider.RegisterValueChangedCallback((ev) => {
+                depthInteger.SetValueWithoutNotify(ev.newValue);
+            });
             this.CreateStringList(mainBox,
                 "Ignore Keyword",
                 "特定の文字列をグループ名に含む場合にノード表示を省略します。常駐グループを表示しない場合に設定してください。");
@@ -143,11 +162,11 @@ namespace UTJ {
                     this.graphView = new BundlesGraph(BundlesGraph.TYPE.BUNDLE_DEPENDENCE,
                                                       selectedGroupFiled.value,
                                                       entry,
+                                                      this.bundleRule,
                                                       shaderNodeToggle.value,
                                                       sharedNodeToggle.value,
-                                                      depthInteger.value,
-                                                      this.ignorePrefixList,
-                                                      this.bundleRule);
+                                                      depthSlider.value,
+                                                      this.ignorePrefixList);
                     this.rootVisualElement.Add(this.graphView);
                     this.rootVisualElement.Add(mainBox);
                 };
@@ -170,11 +189,11 @@ namespace UTJ {
                     this.graphView = new BundlesGraph(BundlesGraph.TYPE.ASSET_DEPENDENCE,
                                                       selectedGroupFiled.value,
                                                       entry,
+                                                      this.bundleRule,
                                                       shaderNodeToggle.value,
                                                       sharedNodeToggle.value,
-                                                      depthInteger.value,
-                                                      this.ignorePrefixList,
-                                                      this.bundleRule);
+                                                      depthSlider.value,
+                                                      this.ignorePrefixList);
                     this.rootVisualElement.Add(this.graphView);
                     this.rootVisualElement.Add(mainBox);
                 };
@@ -335,16 +354,28 @@ namespace UTJ {
             private Dictionary<string, BundleNode> bundleNodes = new Dictionary<string, BundleNode>();
             private List<string> explicitNodes = new List<string>();
 
+            private bool enabledShaderNode = false;
+            private bool enabledSharedNode = false;
+            private int enabledDepth = 0;
+            private List<IgnorePrefix> ignoreList = new List<IgnorePrefix>();
+
             /// <summary>
             /// Bundleの全依存関係
             /// </summary>
-            public BundlesGraph(TYPE type, AddressableAssetGroup group, AddressableAssetEntry entry, bool enabledShaderNode, bool enabledSharedNode, int visibleDepth, List<IgnorePrefix> ignoreList, DependenciesRule rule) {
+            public BundlesGraph(TYPE type, AddressableAssetGroup group, AddressableAssetEntry entry, DependenciesRule rule,
+                                bool enabledShaderNode, bool enabledSharedNode, int enableDepth, List<IgnorePrefix> ignoreList)
+            {
+                this.enabledShaderNode = enabledShaderNode;
+                this.enabledSharedNode = enabledSharedNode;
+                this.enabledDepth = enableDepth;
+                this.ignoreList = ignoreList;
+
                 switch (type) {
                     case TYPE.BUNDLE_DEPENDENCE:
-                        this.ViewBundles(rule, group, entry, enabledSharedNode, ignoreList);
+                        this.ViewBundles(rule, group, entry);
                         break;
                     case TYPE.ASSET_DEPENDENCE:
-                        this.ViewEntries(rule, group, entry, enabledSharedNode, ignoreList);
+                        this.ViewEntries(rule, group, entry);
                         break;
                 }
                 // NOTE: レイアウトが一旦完了しないとノードサイズがとれないのでViewの描画前コールバックに仕込む
@@ -353,8 +384,9 @@ namespace UTJ {
                     var position = new Vector2(400f, 50f);
                     var parentStack = new HashSet<string>(); // 親ノード
                     var placedNames = new HashSet<string>(); // 整列済みノード
+                    var depth = 0;
                     foreach (var bundleName in this.explicitNodes)
-                        position = this.AlignNode(rule.context, bundleName, parentStack, placedNames, enabledShaderNode, visibleDepth, position);
+                        position = this.AlignNode(rule.context, bundleName, parentStack, placedNames, position, depth);
                 });
 
                 this.StretchToParentSize(); // 親のサイズに合わせてGraphViewのサイズを設定
@@ -376,9 +408,9 @@ namespace UTJ {
             /// <summary>
             /// ノード整列
             /// </summary>
-            private Vector2 AlignNode(AddressableAssetsBuildContext context, string bundleName, HashSet<string> parentStack, HashSet<string> placedNodes, bool enabledShaderNode, int visibleDepth, Vector2 position) {
+            private Vector2 AlignNode(AddressableAssetsBuildContext context, string bundleName, HashSet<string> parentStack, HashSet<string> placedNodes, Vector2 position, int depth) {
                 if (this.bundleNodes.TryGetValue(bundleName, out var node)) {
-                    if (!enabledShaderNode) {
+                    if (!this.enabledShaderNode) {
                         //if (node.title == this.shaderNode || node == this.builtinNode) {
                         if (this.IsShaderGroupNode(node) || this.IsBuiltInShaderNode(node)) {
                             node.visible = false;
@@ -401,17 +433,8 @@ namespace UTJ {
 
                     var addChild = false;
                     // 表示深度制限
-                    if (visibleDepth > 0 && parentStack.Count > visibleDepth) {
-                        node.visible = false;
-                        foreach (var edgeList in node.edgeFrom.Values) {
-                            foreach (var edge in edgeList)
-                                edge.visible = false;
-                        }
-                        foreach (var edgeList in node.edgeTo.Values) {
-                            foreach (var edge in edgeList)
-                                edge.visible = false;
-                        }
-                    } else {
+                    depth++;
+                    if (this.enabledDepth == 0 || depth <= this.enabledDepth) {
                         parentStack.Add(bundleName);
 
                         if (context.bundleToImmediateBundleDependencies.TryGetValue(bundleName, out var depBundleNames)) {
@@ -434,7 +457,7 @@ namespace UTJ {
                                     if (placedNodes.Contains(depBundleName))
                                         continue;
 
-                                    pos = this.AlignNode(context, depBundleName, parentStack, placedNodes, enabledShaderNode, visibleDepth, pos);
+                                    pos = this.AlignNode(context, depBundleName, parentStack, placedNodes, pos, depth);
                                     position.y = pos.y;
                                     addChild = true;
                                 }
@@ -442,11 +465,11 @@ namespace UTJ {
                         }
 
                         parentStack.Remove(bundleName);
-
-                        if (!addChild)
-                            position.y += rect.height + NODE_OFFSET_V;
-                        position.y = Mathf.Max(position.y, rect.y + rect.height + NODE_OFFSET_V);
                     }
+
+                    if (!addChild)
+                        position.y += rect.height + NODE_OFFSET_V;
+                    position.y = Mathf.Max(position.y, rect.y + rect.height + NODE_OFFSET_V);
                 }
 
                 return position;
@@ -458,7 +481,7 @@ namespace UTJ {
             /// <param name="bundleName">AssetBundle名</param>
             /// <param name="isExplicit">明示的に呼ばれる（カタログに追加されている）グループか</param>
             /// <param name="createSharedNode">Sharedノード有効か</param>
-            private BundleNode CreateBundleNode(AddressableAssetsBuildContext context, string bundleName, bool isExplicit, bool createSharedNode, List<IgnorePrefix> ignoreList) {
+            private BundleNode CreateBundleNode(AddressableAssetsBuildContext context, string bundleName, bool isExplicit) {
                 if (this.bundleNodes.TryGetValue(bundleName, out var node)) {
                     Debug.LogWarning($"Exist the same bundleName for Nodes : {bundleName}");
                     return node;
@@ -486,12 +509,12 @@ namespace UTJ {
                 // プロジェクト規模が大きくなると表示しきれないので表示量を減らす為の措置
                 if (!isExplicit) {
                     // 任意名無視
-                    foreach (var ignore in ignoreList) {
+                    foreach (var ignore in this.ignoreList) {
                         if (title.Contains(ignore.text))
                             return null;
                     }
                     // 依存グループ無視
-                    if (!createSharedNode && title.Contains("Shared-"))
+                    if (!this.enabledSharedNode && title.Contains("Shared-"))
                         return null;
                 }
 
@@ -605,13 +628,13 @@ namespace UTJ {
                 node.output.Add(node.bundleName, output);
             }
             
-            void AddBundleNode(DependenciesRule rule, BundleNode parentNode, string bundleName, bool enabledSharedNode, List<IgnorePrefix> ignoreList) {
+            void AddBundleNode(DependenciesRule rule, BundleNode parentNode, string bundleName, int depth) {
                 var onlyConnect = false;
                 if (this.bundleNodes.TryGetValue(bundleName, out var node)) {
                     onlyConnect = true;
                 } else {
                     // 新規登録
-                    node = this.CreateBundleNode(rule.context, bundleName, false, enabledSharedNode, ignoreList);
+                    node = this.CreateBundleNode(rule.context, bundleName, isExplicit : false);
                     // 無視されるノードの場合はnull
                     if (node == null)
                         return;
@@ -634,6 +657,11 @@ namespace UTJ {
                 if (onlyConnect)
                     return;
 
+                // 表示深度制限
+                depth++;
+                if (this.enabledDepth > 0 && this.enabledDepth <= depth)
+                    return;
+
                 // 依存先がある場合は作成
                 if (rule.context.bundleToImmediateBundleDependencies.TryGetValue(bundleName, out var depBundleNames)) {
                     // アルファベット順にソート
@@ -651,7 +679,7 @@ namespace UTJ {
                             if (bundleName == depBundleName)
                                 continue;
 
-                            this.AddBundleNode(rule, node, depBundleName, enabledSharedNode, ignoreList);
+                            this.AddBundleNode(rule, node, depBundleName, depth);
                         }
                     }
                 }
@@ -660,9 +688,10 @@ namespace UTJ {
                 node.RefreshExpandedState();
             }
 
-            void ViewBundles(DependenciesRule rule, AddressableAssetGroup group, AddressableAssetEntry entry, bool enabledSharedNode, List<IgnorePrefix> ignoreList) {
+            void ViewBundles(DependenciesRule rule, AddressableAssetGroup group, AddressableAssetEntry entry) {
                 this.bundleNodes.Clear();
                 var context = rule.context;
+                var depth = 0;
 
                 if (context.assetGroupToBundles.TryGetValue(group, out var bundleNames)) {
                     foreach (var bundleName in bundleNames) {
@@ -683,7 +712,7 @@ namespace UTJ {
                                 continue;
                         }
 
-                        var node = this.CreateBundleNode(context, bundleName, true, true, ignoreList);
+                        var node = this.CreateBundleNode(context, bundleName, isExplicit : true);
                         this.explicitNodes.Add(bundleName);
 
                         // implicitノード作成
@@ -697,7 +726,7 @@ namespace UTJ {
                                     if (bundleName == depBundleName)
                                         continue;
 
-                                    this.AddBundleNode(rule, node, depBundleName, enabledSharedNode, ignoreList);
+                                    this.AddBundleNode(rule, node, depBundleName, depth);
                                 }
                             }
                         }
@@ -741,14 +770,14 @@ namespace UTJ {
                 node.outputContainer.Sort(CompareGroup);
             }
 
-            int AddEntriesNode(DependenciesRule rule, BundleNode parentNode, string bundleName, bool enabledSharedNode, List<IgnorePrefix> ignoreList) {
+            int AddEntriesNode(DependenciesRule rule, BundleNode parentNode, string bundleName, int depth) {
                 var onlyConnect = false;
 
                 if (this.bundleNodes.TryGetValue(bundleName, out var node)) {
                     onlyConnect = true;
                 } else {
                     // 新規登録
-                    node = this.CreateBundleNode(rule.context, bundleName, false, enabledSharedNode, ignoreList);
+                    node = this.CreateBundleNode(rule.context, bundleName, isExplicit : false);
                     // 無視されるノードの場合はnull
                     if (node == null)
                         return 0;
@@ -845,6 +874,11 @@ namespace UTJ {
                 if (onlyConnect)
                     return 0;
 
+                // 表示深度制限
+                depth++;
+                if (this.enabledDepth <= depth)
+                    return 0;
+
                 var totalDepCount = 0;
                 // 依存先がある場合は作成
                 if (rule.context.bundleToImmediateBundleDependencies.TryGetValue(bundleName, out var depBundleNames)) {
@@ -855,7 +889,7 @@ namespace UTJ {
                             if (bundleName == depBundleName)
                                 continue;
 
-                            totalDepCount += this.AddEntriesNode(rule, node, depBundleName, enabledSharedNode, ignoreList);
+                            totalDepCount += this.AddEntriesNode(rule, node, depBundleName, depth);
                         }
                     }
                 }
@@ -864,9 +898,10 @@ namespace UTJ {
                 return totalDepCount;
             }
 
-            void ViewEntries(DependenciesRule rule, AddressableAssetGroup group, AddressableAssetEntry entry, bool enabledSharedNode, List<IgnorePrefix> ignoreList) {
+            void ViewEntries(DependenciesRule rule, AddressableAssetGroup group, AddressableAssetEntry entry) {
                 this.bundleNodes.Clear();
                 var context = rule.context;
+                var depth = 0;
 
                 if (context.assetGroupToBundles.TryGetValue(group, out var bundleNames)) {
                     foreach (var bundleName in bundleNames) {
@@ -888,7 +923,7 @@ namespace UTJ {
                         }
 
                         // explicitノード作成
-                        var node = this.CreateBundleNode(rule.context, bundleName, true, enabledSharedNode, ignoreList);
+                        var node = this.CreateBundleNode(rule.context, bundleName, isExplicit : true);
                         this.explicitNodes.Add(bundleName);
 
                         // 内容物表示
@@ -904,7 +939,7 @@ namespace UTJ {
                                     if (bundleName == depBundleName)
                                         continue;
 
-                                    var depCount = this.AddEntriesNode(rule, node, depBundleName, enabledSharedNode, ignoreList);
+                                    var depCount = this.AddEntriesNode(rule, node, depBundleName, depth);
                                     totalDepth += depCount;
                                 }
                             }
