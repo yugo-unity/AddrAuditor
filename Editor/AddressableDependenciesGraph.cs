@@ -15,14 +15,14 @@ using UnityEditor;
 using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Build;
 using UnityEditor.AddressableAssets.Build.AnalyzeRules;
-using UnityEditor.AddressableAssets.Build.DataBuilders;
 using UnityEditor.AddressableAssets.Build.BuildPipelineTasks;
+using UnityEditor.AddressableAssets.Build.DataBuilders;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.AddressableAssets.Settings.GroupSchemas;
 using UnityEditor.Build.Content;
 using UnityEditor.Build.Pipeline;
-using UnityEditor.UIElements;
 using UnityEditor.Experimental.GraphView;
+using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -158,10 +158,10 @@ namespace UTJ {
                         this.rootVisualElement.Remove(this.graphView);
                     this.bundleRule.Execute();
 
-                    var entry = selectedEntryField.index > 0 ? selectedEntryField.value : null;
+                    var selectedEntry = selectedEntryField.index > 0 ? selectedEntryField.value : null;
                     this.graphView = new BundlesGraph(BundlesGraph.TYPE.BUNDLE_DEPENDENCE,
                                                       selectedGroupFiled.value,
-                                                      entry,
+                                                      selectedEntry,
                                                       this.bundleRule,
                                                       shaderNodeToggle.value,
                                                       sharedNodeToggle.value,
@@ -185,10 +185,10 @@ namespace UTJ {
                         this.rootVisualElement.Remove(this.graphView);
                     this.bundleRule.Execute();
 
-                    var entry = selectedEntryField.index > 0 ? selectedEntryField.value : null;
+                    var selectedEntry = selectedEntryField.index > 0 ? selectedEntryField.value : null;
                     this.graphView = new BundlesGraph(BundlesGraph.TYPE.ASSET_DEPENDENCE,
                                                       selectedGroupFiled.value,
-                                                      entry,
+                                                      selectedEntry,
                                                       this.bundleRule,
                                                       shaderNodeToggle.value,
                                                       sharedNodeToggle.value,
@@ -362,9 +362,10 @@ namespace UTJ {
             /// <summary>
             /// Bundleの全依存関係
             /// </summary>
-            public BundlesGraph(TYPE type, AddressableAssetGroup group, AddressableAssetEntry entry, DependenciesRule rule,
+            public BundlesGraph(TYPE type, AddressableAssetGroup selectedGroup, AddressableAssetEntry selectedEntry, DependenciesRule rule,
                                 bool enabledShaderNode, bool enabledSharedNode, int enableDepth, List<IgnorePrefix> ignoreList)
             {
+                // options
                 this.enabledShaderNode = enabledShaderNode;
                 this.enabledSharedNode = enabledSharedNode;
                 this.enabledDepth = enableDepth;
@@ -372,10 +373,10 @@ namespace UTJ {
 
                 switch (type) {
                     case TYPE.BUNDLE_DEPENDENCE:
-                        this.ViewBundles(rule, group, entry);
+                        this.ViewBundles(rule, selectedGroup, selectedEntry);
                         break;
                     case TYPE.ASSET_DEPENDENCE:
-                        this.ViewEntries(rule, group, entry);
+                        this.ViewEntries(rule, selectedGroup, selectedEntry);
                         break;
                 }
                 // NOTE: レイアウトが一旦完了しないとノードサイズがとれないのでViewの描画前コールバックに仕込む
@@ -420,6 +421,12 @@ namespace UTJ {
                             }
                             return position;
                         }
+                    }
+
+                    // フィルタリングによって独立している依存ノードは非表示
+                    if (depth > 0 && node.input.Count == 0) {
+                        node.visible = false;
+                        return position;
                     }
 
                     var rect = node.GetPosition();
@@ -688,22 +695,22 @@ namespace UTJ {
                 node.RefreshExpandedState();
             }
 
-            void ViewBundles(DependenciesRule rule, AddressableAssetGroup group, AddressableAssetEntry entry) {
+            void ViewBundles(DependenciesRule rule, AddressableAssetGroup selectedGroup, AddressableAssetEntry selectedEntry) {
                 this.bundleNodes.Clear();
                 var context = rule.context;
                 var depth = 0;
 
-                if (context.assetGroupToBundles.TryGetValue(group, out var bundleNames)) {
+                if (context.assetGroupToBundles.TryGetValue(selectedGroup, out var bundleNames)) {
                     foreach (var bundleName in bundleNames) {
                         if (bundleName.Contains(UNITY_BUILTIN_SHADERS))
                             continue;
 
                         // 指定エントリ名でフィルタリング
-                        if (entry != null) {
+                        if (selectedEntry != null) {
                             var hit = false;
                             var bundleInfo = rule.bunldeInfos.Find(val => val.assetBundleName == bundleName);
                             foreach (var assetName in bundleInfo.assetNames) {
-                                if (assetName == entry.AssetPath) {
+                                if (assetName == selectedEntry.AssetPath) {
                                     hit = true;
                                     break;
                                 }
@@ -746,7 +753,7 @@ namespace UTJ {
             /// <summary>
             /// 内容物をOutputポートに登録
             /// </summary>
-            private void CreateOutputPortsWithAssets(DependenciesRule rule, BundleNode node) {
+            private void CreateOutputPortsWithAssets(DependenciesRule rule, BundleNode node, AddressableAssetEntry selectedEntry) {
                 if (node.bundleName.Contains(UNITY_BUILTIN_SHADERS)) {
                     node.assetGuid.Add(UNITY_BUILTIN_SHADERS, UNITY_BUILTIN_SHADERS_GUID);
                     return;
@@ -758,6 +765,10 @@ namespace UTJ {
                 });
 
                 foreach (var assetName in info.assetNames) {
+                    // 指定エントリ名でフィルタリング for Pack Together
+                    if (selectedEntry != null && selectedEntry.AssetPath != assetName)
+                        continue;
+
                     var output = Port.Create<FlowingEdge>(Orientation.Horizontal, Direction.Output, Port.Capacity.Multi, typeof(float));
                     output.portName = assetName;
                     output.capabilities = 0;
@@ -783,7 +794,8 @@ namespace UTJ {
                         return 0;
 
                     // 内容物表示
-                    this.CreateOutputPortsWithAssets(rule, node);
+                    // NOTE: 依存ノードのエントリフィルタは不要
+                    this.CreateOutputPortsWithAssets(rule, node, selectedEntry : null);
                 }
 
                 // 親のエントリアセットを走査
@@ -898,7 +910,7 @@ namespace UTJ {
                 return totalDepCount;
             }
 
-            void ViewEntries(DependenciesRule rule, AddressableAssetGroup group, AddressableAssetEntry entry) {
+            void ViewEntries(DependenciesRule rule, AddressableAssetGroup group, AddressableAssetEntry selectedEntry) {
                 this.bundleNodes.Clear();
                 var context = rule.context;
                 var depth = 0;
@@ -908,12 +920,12 @@ namespace UTJ {
                         if (bundleName.Contains(UNITY_BUILTIN_SHADERS))
                             continue;
 
-                        // 指定エントリ名でフィルタリング
-                        if (entry != null) {
+                        // 指定エントリ名でフィルタリング for Pack Separately
+                        if (selectedEntry != null) {
                             var hit = false;
                             var bundleInfo = rule.bunldeInfos.Find(val => val.assetBundleName == bundleName);
                             foreach (var assetName in bundleInfo.assetNames) {
-                                if (assetName == entry.AssetPath) {
+                                if (assetName == selectedEntry.AssetPath) {
                                     hit = true;
                                     break;
                                 }
@@ -927,7 +939,7 @@ namespace UTJ {
                         this.explicitNodes.Add(bundleName);
 
                         // 内容物表示
-                        this.CreateOutputPortsWithAssets(rule, node);
+                        this.CreateOutputPortsWithAssets(rule, node, selectedEntry);
 
                         // implicitノード作成
                         var totalDepth = 0;
