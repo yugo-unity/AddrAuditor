@@ -236,7 +236,7 @@ namespace UTJ {
         public class DependenciesRule : BundleRuleBase {
             public AddressableAssetsBuildContext context { get; private set; }
             public ExtractDataTask extractData { get; private set; }
-            public List<AssetBundleBuild> bunldeInfos { get; private set; }
+            public List<AssetBundleBuild> bundleInfos { get; private set; }
 
             public delegate bool IsPathCallback(string path);
             public IsPathCallback IsPathValidForEntry { get; private set; }
@@ -267,14 +267,14 @@ namespace UTJ {
                     this.extractData = (ExtractDataTask)extractDataField.GetValue(this);
 
                     var bundleInfoField = this.GetType().GetField("m_AllBundleInputDefs", BindingFlags.Instance | BindingFlags.NonPublic);
-                    this.bunldeInfos = (List<AssetBundleBuild>)bundleInfoField.GetValue(this);
+                    this.bundleInfos = (List<AssetBundleBuild>)bundleInfoField.GetValue(this);
                 }
             }
 
             public void Clear() {
                 this.context = null;
                 this.extractData = null;
-                this.bunldeInfos = null;
+                this.bundleInfos = null;
 
                 // Analyze共通処理
                 ClearAnalysis();
@@ -708,7 +708,7 @@ namespace UTJ {
                         // 指定エントリ名でフィルタリング
                         if (selectedEntry != null) {
                             var hit = false;
-                            var bundleInfo = rule.bunldeInfos.Find(val => val.assetBundleName == bundleName);
+                            var bundleInfo = rule.bundleInfos.Find(val => val.assetBundleName == bundleName);
                             foreach (var assetName in bundleInfo.assetNames) {
                                 if (assetName == selectedEntry.AssetPath) {
                                     hit = true;
@@ -760,7 +760,7 @@ namespace UTJ {
                 }
 
                 // 内容物登録
-                var info = rule.bunldeInfos.Find((info) => {
+                var info = rule.bundleInfos.Find((info) => {
                     return info.assetBundleName == node.bundleName;
                 });
 
@@ -923,7 +923,7 @@ namespace UTJ {
                         // 指定エントリ名でフィルタリング for Pack Separately
                         if (selectedEntry != null) {
                             var hit = false;
-                            var bundleInfo = rule.bunldeInfos.Find(val => val.assetBundleName == bundleName);
+                            var bundleInfo = rule.bundleInfos.Find(val => val.assetBundleName == bundleName);
                             foreach (var assetName in bundleInfo.assetNames) {
                                 if (assetName == selectedEntry.AssetPath) {
                                     hit = true;
