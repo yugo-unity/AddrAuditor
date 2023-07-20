@@ -387,6 +387,9 @@ namespace UTJ
                     group = settings.CreateGroup(groupName, setAsDefaultGroup: false, readOnly: false, postEvent: false, groupTemplate.SchemaObjects);
                 }
                 var schema = group.GetSchema<BundledAssetGroupSchema>();
+                if (schema == null)
+                    schema = group.AddSchema<BundledAssetGroupSchema>();
+
                 // NOTE: 依存Assetなのでcatalogに登録は省略（catalog.jsonの削減）
                 schema.IncludeAddressInCatalog = false;
                 schema.IncludeGUIDInCatalog = false;
