@@ -16,13 +16,16 @@ using System.Collections.Generic;
 /// リモートアセットについてはKey値をハードコーディングするのは良くない
 /// よって本スクリプトはローカルのみを考慮し、型とアドレスが共に同一のエントリがある場合はコンパイルエラーとなる、で正しい
 /// </summary>
-public static class AddressableKeyDefine {
+public static class AddrKeyDefine
+{
 	// 出力先ディレクトリ
 	private static readonly string makeClassDirectoryPathWithAssets = "Assets/";
+
 	// ファイル名
 	private static readonly string buildInfomationClassFileName = "AddressableKeys.cs";
 
-	private struct Entry {
+	private struct Entry
+	{
 		public string address;
 		public string guid;
 	}
@@ -31,7 +34,8 @@ public static class AddressableKeyDefine {
 	/// AddressablesのKey定義ファイルを出力する
 	/// </summary>
 	[MenuItem("UTJ/ADDR Create define for Keys")]
-	public static void SetBuildSettingScriptingDefineSymbols_Develop() {
+	public static void SetBuildSettingScriptingDefineSymbols_Develop()
+	{
 		var date = System.DateTime.Now.ToString("yyyy/MM/dd/HH:mm");
 
 		var groups = AddressableAssetSettingsDefaultObject.Settings.groups;
@@ -39,34 +43,43 @@ public static class AddressableKeyDefine {
 		var typeAddr = new Dictionary<System.Type, List<Entry>>();
 
 		var code = $"// Created by AddressableKeyDefine.cs {date}\n";
-		foreach (var g in groups) {
+		foreach (var g in groups)
+		{
 			var schema = g.GetSchema<BundledAssetGroupSchema>();
 
 			// Built-in Group
 			if (schema == null)
 				continue;
 
-			if (schema.IncludeAddressInCatalog || schema.IncludeGUIDInCatalog) {
+			if (schema.IncludeAddressInCatalog || schema.IncludeGUIDInCatalog)
+			{
 				// GUIDを使うのでAddress不要
 				schema.IncludeGUIDInCatalog = true;
 				schema.IncludeAddressInCatalog = false;
 
-				void CollectEntries(System.Type type, string addr, string guid) {
+				void CollectEntries(System.Type type, string addr, string guid)
+				{
 					var newEntry = new Entry { address = addr, guid = guid };
-					if (typeAddr.TryGetValue(type, out var list)) {
+					if (typeAddr.TryGetValue(type, out var list))
+					{
 						list.Add(newEntry);
-					} else {
+					}
+					else
+					{
 						list = new List<Entry> { newEntry };
 						typeAddr.Add(type, list);
 					}
 				}
 
-				void CollectFolderEntries(string rootPath, string folderPath, HashSet<string> subEntries) {
+				void CollectFolderEntries(string rootPath, string folderPath, HashSet<string> subEntries)
+				{
 					var guids = AssetDatabase.FindAssets(string.Empty, new[] { folderPath });
-					foreach (var guid in guids) {
+					foreach (var guid in guids)
+					{
 						var assetPath = AssetDatabase.GUIDToAssetPath(guid);
 
-						if (AssetDatabase.IsValidFolder(assetPath)) {
+						if (AssetDatabase.IsValidFolder(assetPath))
+						{
 							CollectFolderEntries(rootPath, assetPath, subEntries);
 							continue;
 						}
@@ -93,13 +106,17 @@ public static class AddressableKeyDefine {
 				}
 
 				var subEntries = new HashSet<string>();
-				foreach (var e in g.entries) {
+				foreach (var e in g.entries)
+				{
 					// ディレクトリのエントリはPrefixをつける
 					// NOTE: なくても、まぁ
-					if (e.IsFolder) {
+					if (e.IsFolder)
+					{
 						var rootPath = Path.GetDirectoryName(e.AssetPath).Replace("\\", "/") + "/";
 						CollectFolderEntries(rootPath, e.AssetPath, subEntries);
-					} else {
+					}
+					else
+					{
 						var main = e.MainAsset;
 						var type = e.MainAssetType;
 						// 派生クラスが多いのでまとめる
@@ -112,7 +129,9 @@ public static class AddressableKeyDefine {
 				}
 			}
 		}
-		foreach (var pair in typeAddr) {
+
+		foreach (var pair in typeAddr)
+		{
 			var temp = pair.Key.ToString().Split('.');
 			var type = temp[temp.Length - 1];
 
@@ -134,7 +153,8 @@ public static class AddressableKeyDefine {
 			type = type.Replace("PhysicMaterial", "PhyMat");
 
 			code += $"\npublic static class ADDR_{type.ToUpper()}" + " {\n";
-			foreach (var e in pair.Value) {
+			foreach (var e in pair.Value)
+			{
 				var addr = Path.GetFileNameWithoutExtension(e.address);
 
 				// @不可
@@ -152,6 +172,7 @@ public static class AddressableKeyDefine {
 
 				code += $"\tpublic const string {addr.ToUpper()} = \"{e.guid}\";\n";
 			}
+
 			code += "}\n";
 		}
 

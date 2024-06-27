@@ -1,5 +1,5 @@
 /***********************************************************************************************************
- * AddressableDumpBundleName.cs
+ * AddrDumpBundleName.cs
  * Copyright (c) Yugo Fujioka - Unity Technologies Japan K.K.
  * 
  * Licensed under the Unity Companion License for Unity-dependent projects--see Unity Companion License.
@@ -10,13 +10,11 @@
 ***********************************************************************************************************/
 
 using System.Collections.Generic;
-using System.Reflection;
 using UnityEditor;
 using UnityEditor.AddressableAssets;
-using UnityEditor.AddressableAssets.Build;
-using UnityEditor.AddressableAssets.Build.AnalyzeRules;
 using UnityEditor.AddressableAssets.Build.BuildPipelineTasks;
 using UnityEditor.Build.Pipeline;
+using UnityEngine;
 
 namespace UTJ {
     internal class AddressableDumpBundleName : Editor {
@@ -30,28 +28,21 @@ namespace UTJ {
         /// AddressablesのbundleのHashとグループ名のダンプ
         /// MemoryProfilerではHash名しかでないので照合用
         /// </summary>
-        class DumpBundleName : BundleRuleBase {
+        class DumpBundleName {
             public DumpBundleName() {
                 var settings = AddressableAssetSettingsDefaultObject.Settings;
 
-                // Analyze共通処理
-                ClearAnalysis();
-                if (!BuildUtility.CheckModifiedScenesAndAskToSave()) {
-                    UnityEngine.Debug.LogError("Cannot run Analyze with unsaved scenes");
+                var allBundleInputDefs = new List<AssetBundleBuild>();
+                var bundleToAssetGroup = new Dictionary<string, string>();
+                AddrUtility.CalculateInputDefinitions(settings, allBundleInputDefs, bundleToAssetGroup);
+                var aaContext = AddrUtility.GetBuildContext(settings, bundleToAssetGroup);
+                var extractData = new ExtractDataTask();
+                var exitCode = AddrUtility.RefleshBuild(settings, allBundleInputDefs, extractData, aaContext);
+                if (exitCode < ReturnCode.Success)
+                {
+                    Debug.LogError($"Analyze build failed. {exitCode}");
                     return;
                 }
-                CalculateInputDefinitions(settings);
-                var context = GetBuildContext(settings);
-                var exitCode = RefreshBuild(context);
-                if (exitCode < ReturnCode.Success) {
-                    UnityEngine.Debug.LogError($"Analyze build failed. {exitCode}");
-                    return;
-                }
-
-                // Addressables 1.20以降はReflection不要
-                //this.extractData = this.ExtractData;
-                var extractDataField = this.GetType().GetField("m_ExtractData", BindingFlags.Instance | BindingFlags.NonPublic);
-                var extractData = (ExtractDataTask)extractDataField.GetValue(this);
 
                 foreach (var pair in extractData.WriteData.FileToBundle) {
 
@@ -60,14 +51,14 @@ namespace UTJ {
                     // Hashを取り除いてグループ名と結合
                     var temp = System.IO.Path.GetFileName(bundleName).Split(new string[] { "_assets_", "_scenes_" }, System.StringSplitOptions.None);
                     var title = temp[temp.Length - 1];
-                    if (context.bundleToAssetGroup.TryGetValue(bundleName, out var groupGUID)) {
-                        var groupName = context.Settings.FindGroup(findGroup => findGroup != null && findGroup.Guid == groupGUID).name;
+                    if (aaContext.bundleToAssetGroup.TryGetValue(bundleName, out var groupGUID)) {
+                        var groupName = aaContext.Settings.FindGroup(findGroup => findGroup && findGroup.Guid == groupGUID).name;
                         title = $"{groupName}/{title}";
                     }
 
                     // MemoryManagerでは {FileID}.bundle で表示される
                     // Console Logに出力して該当IDを検索すれば該当ファイルがわかるようにする
-                    UnityEngine.Debug.LogWarning($"File ID : {pair.Key} || Internal Name {temp[0]} || Group+Asset {title}");
+                    Debug.LogWarning($"File ID : {pair.Key} || Internal Name {temp[0]} || Group+Asset {title}");
                 }
             }
         }
