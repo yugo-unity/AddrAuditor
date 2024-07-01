@@ -58,6 +58,7 @@ namespace UTJ
             
             var settings = AddressableAssetSettingsDefaultObject.Settings;
             var mainElement = this.rootVisualElement;
+            defaultGroupGuid = settings.DefaultGroup.Guid;
             
             AddrUtility.CreateSpace(mainElement);
 
@@ -95,7 +96,6 @@ namespace UTJ
             sortGroupButton.clicked += () =>
             {
                 // alphanumericソート
-                defaultGroupGuid = settings.DefaultGroup.Guid;
                 settings.groups.Sort(CompareGroup);
                 settings.SetDirty(AddressableAssetSettings.ModificationEvent.EntryModified, eventData: null,
                     postEvent: true, settingsModified: true);
@@ -124,7 +124,6 @@ namespace UTJ
                 foreach (var group in deletedGroupList)
                     settings.RemoveGroup(group);
                 // alphanumericソート
-                defaultGroupGuid = settings.DefaultGroup.Guid;
                 settings.groups.Sort(CompareGroup);
                 settings.SetDirty(AddressableAssetSettings.ModificationEvent.EntryModified, eventData: null,
                     postEvent: true, settingsModified: true);
@@ -187,7 +186,8 @@ namespace UTJ
 
         void CreatePopup(VisualElement root, AddressableAssetSettings settings, AddrExtendGroupingSettings groupingSettings)
         {
-            var choices = new List<string>(settings.groups.Count + 1) { "" };
+            var choices = new List<string>(settings.groups.Count + 1) { "none" };
+            settings.groups.Sort(CompareGroup);
             foreach (var group in settings.groups)
             {
                 if (group.Name.Contains(SHARED_GROUP_NAME) ||
