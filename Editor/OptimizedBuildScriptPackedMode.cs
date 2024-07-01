@@ -40,11 +40,10 @@ namespace UTJ
             return base.ProcessGroup(assetGroup, aaContext);
         }
 
-        // TODO: Assetの依存関係確認したいだけなのにtypeDBいる？
+        // Assetの依存関係確認したいだけなのにtypeDBはいるのか？
         // static TypeDB GetTypeDB(BuildTarget buildTarget)
         // {
         //     var buildTargetGroup = BuildPipeline.GetBuildTargetGroup(EditorUserBuildSettings.activeBuildTarget);
-        //
         //     var settings = new ScriptCompilationSettings
         //     {
         //         target = buildTarget,
@@ -52,6 +51,7 @@ namespace UTJ
         //         options = ScriptCompilationOptions.None,
         //     };
         //
+        //     // 独自じゃなくてSBPのキャッシュディレクトリ参照すればよさそう
         //     var tempPath = ".temp/AssetBundleHelper_Compile";
         //     if (Directory.Exists(tempPath))
         //         Directory.Delete(tempPath, true);
@@ -76,17 +76,40 @@ namespace UTJ
 
                 foreach (var entry in group.entries)
                 {
-                    var guid = new GUID(entry.guid);
-                    
-                    // Explicit AssetのObjectIdentifier
-                    var objects = ContentBuildInterface.GetPlayerObjectIdentifiersInAsset(guid, buildTarget);
-                    foreach (var objId in objects)
-                        usedAssets.Add(objId);
+                    if (entry.IsScene)
+                    {
+                        AddressableAssetsBuildContext aaContext;
+                        var buildSettings = buildParameters.GetContentBuildSettings();
+                        var usageTags = new BuildUsageTagSet();
+                        var sceneInfo = ContentBuildInterface.CalculatePlayerDependenciesForScene(entry.AssetPath, buildSettings, usageTags, dependencyData.DependencyUsageCache);
+                        foreach (var objId in sceneInfo.referencedObjects)
+                            usedAssets.Add(objId);
+                    }
+                    else
+                    {
+                        // Explicit AssetのObjectIdentifier
+                        var guid = new GUID(entry.guid);
+                        var objects = ContentBuildInterface.GetPlayerObjectIdentifiersInAsset(guid, buildTarget);
+                        foreach (var objId in objects)
+                            usedAssets.Add(objId);
 
-                    // Implicit AssetのObjectIdentifier
-                    var dependencies = ContentBuildInterface.GetPlayerDependenciesForObjects(objects, buildTarget, null);
-                    foreach (var objId in dependencies)
-                        usedAssets.Add(objId);
+                        // Implicit AssetのObjectIdentifier
+                        objects = ContentBuildInterface.GetPlayerDependenciesForObjects(objects, buildTarget, null);
+                        foreach (var objId in objects)
+                            usedAssets.Add(objId);
+                        
+                        // NOTE: フォルダは依存関係としてSubAssetが検出されないので明示検索
+                        if (entry.IsFolder)
+                        {
+                            foreach (var subAsset in entry.SubAssets)
+                            {
+                                guid = new GUID(subAsset.guid);
+                                objects = ContentBuildInterface.GetPlayerObjectIdentifiersInAsset(guid, buildTarget);
+                                foreach (var objId in objects)
+                                    usedAssets.Add(objId);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -104,7 +127,7 @@ namespace UTJ
                             {
                                 info.includedObjects.RemoveAt(i);
                                 --i;
-
+            
                                 var instance = ObjectIdentifier.ToObject(objId);
                                 var path = AssetDatabase.GUIDToAssetPath(objId.guid);
                                 Debug.Log($"Removed IncludedObjects ---- {path} : {instance.name}[{instance.GetType()}]");
@@ -186,7 +209,7 @@ namespace UTJ
         // // by Build Layout when Preference/Addressables/Debug Build Layout is enabled.
         // // On the other hand, you can also like this.
         // // 
-        // // Bundle NamingがHash to Filenameの場合、元が何のbundleだったか確認するのに
+        // // Bundle NamingがHash to Filenameの場合、元が何のbundleだったか確認したい時用
         // // 通常はBuild Layoutを出力することで確認出来るが下記手法で自前で出力することも可能
         // //-----------------------------------------------------------------------------
         // protected override string ConstructAssetBundleName(AddressableAssetGroup assetGroup, BundledAssetGroupSchema schema, BundleDetails info, string assetBundleName) {
