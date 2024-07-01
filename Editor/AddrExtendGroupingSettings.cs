@@ -7,6 +7,7 @@ namespace UTJ
     {
         public bool hashName = true;
         public bool shaderGroup = true;
+        public bool allowDuplicatedMaterial = true;
         //public int singleThreshold = 0;
         public string residentGroupGUID;
     }

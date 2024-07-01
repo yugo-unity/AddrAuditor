@@ -261,6 +261,7 @@ namespace UTJ
             toggle.name = title;
             toggle.tooltip = tooltip;
             toggle.value = defaultValue;
+            toggle.labelElement.style.minWidth = (StyleLength)200f;
             root.Add(toggle);
 
             return toggle;

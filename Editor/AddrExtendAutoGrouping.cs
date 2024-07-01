@@ -21,6 +21,7 @@ using UnityEditor.Build.Content;
 using UnityEditor.Build.Pipeline;
 using UnityEditor.Build.Pipeline.Interfaces;
 using UnityEngine;
+using UnityEngine.Assertions;
 using UnityEngine.U2D;
 using UnityEngine.UIElements;
 
@@ -33,7 +34,7 @@ namespace UTJ
         public const string SINGLE_GROUP_NAME = "+Shared_Single";
         public const string RESIDENT_GROUP_NAME = "+Residents";
 
-        const string SETTINGS_PATH = "Assets/AddressableGroupingSettings.asset";
+        const string SETTINGS_PATH = "Assets/AddrExtendGroupingSettings.asset";
 
 
         [MenuItem("UTJ/ADDR Auto-Grouping Window")]
@@ -51,9 +52,8 @@ namespace UTJ
             var groupingSettings = AssetDatabase.LoadAssetAtPath<AddrExtendGroupingSettings>(SETTINGS_PATH);
             if (groupingSettings == null)
             {
-                var obj = ScriptableObject.CreateInstance("AddressableGroupingSettings");
-                AssetDatabase.CreateAsset(obj, SETTINGS_PATH);
-                groupingSettings = obj as AddrExtendGroupingSettings;
+                groupingSettings = ScriptableObject.CreateInstance<AddrExtendGroupingSettings>();
+                AssetDatabase.CreateAsset(groupingSettings, SETTINGS_PATH);
             }
             
             var settings = AddressableAssetSettingsDefaultObject.Settings;
@@ -139,12 +139,29 @@ namespace UTJ
                 "Bundle Name is Hash",
                 "Bundleのファイル名をハッシュ値にします。開発中は無効とした方が便利です。",
                 groupingSettings.hashName);
-            fileNameToggle.RegisterValueChangedCallback((evt) => groupingSettings.hashName = evt.newValue);
+            fileNameToggle.RegisterValueChangedCallback((evt) =>
+            {
+                groupingSettings.hashName = evt.newValue;
+                EditorUtility.SetDirty(groupingSettings);
+            });
             var shaderGroupToggle = AddrUtility.CreateToggle(root,
                 "Shader Group",
                 "Shader専用のグループを作ります。最終的にメモリに適したグルーピングを行ってください。",
                 groupingSettings.shaderGroup);
-            shaderGroupToggle.RegisterValueChangedCallback((evt) => groupingSettings.shaderGroup = evt.newValue);
+            shaderGroupToggle.RegisterValueChangedCallback((evt) =>
+            {
+                groupingSettings.shaderGroup = evt.newValue;
+                EditorUtility.SetDirty(groupingSettings);
+            });
+            var allowDuplicatedMaterial = AddrUtility.CreateToggle(root,
+                "Allow duplicated materials",
+                "Materialの重複を許容します。過剰なbundleの細分化は避けた方がベターです。",
+                groupingSettings.allowDuplicatedMaterial);
+            allowDuplicatedMaterial.RegisterValueChangedCallback((evt) =>
+            {
+                groupingSettings.allowDuplicatedMaterial = evt.newValue;
+                EditorUtility.SetDirty(groupingSettings);
+            });
             // NOTE: パッチ差分が修正されたので特に不要
             // var thresholdField = AddrUtility.CreateInteger(root,
             //     "Threshold (KiB)",
@@ -185,16 +202,18 @@ namespace UTJ
             //field.AddToClassList("some-styled-field");
             var firstGroup = settings.FindGroup(g => g && g.Guid == groupingSettings.residentGroupGUID);
             field.value = firstGroup != null ? firstGroup.Name : "";
+            field.labelElement.style.minWidth = (StyleLength)200f;
             field.RegisterValueChangedCallback((evt) =>
             {
                 var group = settings.FindGroup(evt.newValue);
                 groupingSettings.residentGroupGUID = group != null ? group.Guid : "";
+                EditorUtility.SetDirty(groupingSettings);
             });
             root.Add(field);
         }
 
         #region SORTING
-        static System.Text.RegularExpressions.Regex NUM_REGEX = new System.Text.RegularExpressions.Regex(@"[^0-9]");
+        static readonly System.Text.RegularExpressions.Regex NUM_REGEX = new System.Text.RegularExpressions.Regex(@"[^0-9]");
         static string defaultGroupGuid = "";
 
         /// <summary>
@@ -263,7 +282,15 @@ namespace UTJ
                     var validMethod = aauType.GetMethod("IsPathValidForEntry",
                         BindingFlags.Static | BindingFlags.NonPublic,
                         null, new System.Type[] { typeof(string) }, null);
-                    IsPathValidForEntry = System.Delegate.CreateDelegate(typeof(IsPathCallback), validMethod) as IsPathCallback;
+                    if (validMethod != null)
+                    {
+                        IsPathValidForEntry =
+                            System.Delegate.CreateDelegate(typeof(IsPathCallback), validMethod) as IsPathCallback;
+                    }
+                    else
+                    {
+                        Debug.LogError("Failed Reflection - IsPathValidForEntry ");
+                    }
                 }
                 // // 圧縮されたテクスチャのファイルサイズ取得
                 // var editorAssembly = typeof(TextureImporter).Assembly;
@@ -344,7 +371,7 @@ namespace UTJ
                 
                 // 暗黙の依存Asset情報を抽出
                 var (implicitParams, atlases) =
-                    CollectImplicitParams(aaContext.bundleToAssetGroup, extractData.WriteData, groupingSettings.residentGroupGUID);
+                    CollectImplicitParams(aaContext.bundleToAssetGroup, extractData.WriteData, groupingSettings);
 
                 // 既に配置されてるSharedAssetグループ数
                 var sharedGroupCount = settings.groups.FindAll(group => group.name.Contains(SHARED_GROUP_NAME)).Count;
@@ -509,6 +536,11 @@ namespace UTJ
                 if (group == null)
                 {
                     var groupTemplate = settings.GetGroupTemplateObject(0) as AddressableAssetGroupTemplate;
+                    if (groupTemplate == null)
+                    {
+                        Debug.LogError("Not found AddressableAssetGroupTemplate");
+                        return null;
+                    }
                     group = settings.CreateGroup(groupName, false, true, false,
                         groupTemplate.SchemaObjects);
                 }
@@ -516,6 +548,9 @@ namespace UTJ
                 var schema = group.GetSchema<BundledAssetGroupSchema>();
                 if (schema == null)
                     schema = group.AddSchema<BundledAssetGroupSchema>();
+                        
+                // NOTE: 必ず無効にしないと反映されない
+                schema.UseDefaultSchemaSettings = false;
 
                 // NOTE: 依存Assetなのでcatalogに登録は省略（catalog.jsonの削減）
                 schema.IncludeAddressInCatalog = false;
@@ -555,7 +590,7 @@ namespace UTJ
             /// </summary>
             static (List<ImplicitParam>, List<SpriteAtlasParam>) CollectImplicitParams(
                 Dictionary<string, string> bundleToAssetGroup,
-                IBundleWriteData writeData, string residentGroupGuid)
+                IBundleWriteData writeData, AddrExtendGroupingSettings groupingSettings)
             {
                 var settings = AddressableAssetSettingsDefaultObject.Settings;
                 var validImplicitGuids = new Dictionary<GUID, ImplicitParam>();
@@ -569,13 +604,6 @@ namespace UTJ
                         foreach (var objectId in objects)
                         {
                             var guid = objectId.guid;
-                            // NOTE: PostProcessingVolumeやPlayableなどインスタンスがないアセットが存在
-                            var instance = ObjectIdentifier.ToObject(objectId);
-                            var type = instance != null ? instance.GetType() : null;
-
-                            // // SpriteAtlasは単品チェックでバラのテクスチャが引っかからないように集めておく
-                            // if (type == typeof(SpriteAtlas))
-                            //     atlases.Add(instance as SpriteAtlas);
 
                             // EntryされてるExplicit Assetなら無視
                             if (writeData.AssetToFiles.ContainsKey(guid))
@@ -601,13 +629,20 @@ namespace UTJ
                             // Lightmapはシーンに依存するので無視
                             if (path.Contains("Lightmap-"))
                                 continue;
+                            
+                            // NOTE: PostProcessingVolumeやPlayableなどインスタンスがないアセットが存在
+                            var instance = ObjectIdentifier.ToObject(objectId);
+                            var type = instance != null ? instance.GetType() : null;
 
                             // NOTE: Materialはファイルサイズが小さいので重複を許容して過剰なbundleを避ける
-                            if (type == typeof(Material))
-                                continue;
-                            
+                            if (groupingSettings.allowDuplicatedMaterial)
+                            {
+                                if (type == typeof(Material))
+                                    continue;
+                            }
+
                             var isSubAsset = instance != null && AssetDatabase.IsSubAsset(instance);
-                            var isResident = groupGuid == residentGroupGuid;
+                            var isResident = groupGuid == groupingSettings.residentGroupGUID;
 
                             if (validImplicitGuids.TryGetValue(guid, out var param))
                             {
