@@ -199,6 +199,7 @@ namespace UTJ
             }
 
             var field = new DropdownField("Resident Group", choices, 0);
+            field.tooltip = "常駐アセットのグループがあれば指定してください、依存関係にあるアセットが重複アセットとして検出された場合、Residentsとしてまとめられます。";
             //field.AddToClassList("some-styled-field");
             var firstGroup = settings.FindGroup(g => g && g.Guid == groupingSettings.residentGroupGUID);
             field.value = firstGroup != null ? firstGroup.Name : "";
