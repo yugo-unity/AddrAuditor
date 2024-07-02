@@ -21,11 +21,11 @@ namespace UTJ
         //AddressableAssetsBuildContext aaContext;
 
 
-        protected override string ProcessGroup(AddressableAssetGroup assetGroup,
-            AddressableAssetsBuildContext aaContext)
+        protected override string ProcessGroup(AddressableAssetGroup assetGroup, AddressableAssetsBuildContext aaContext)
         {
             //this.aaContext = aaContext;
             
+            // 毎度フルビルド前提でAssetBundleを更新する前提の場合、TypeTreeを無効化することでbundleデータを削減できる
             // NOTE: TypeTreeを削除した場合Editorでもロードできなくなるので注意
 #if !DEBUG
             ContentPipeline.BuildCallbacks.PostScriptsCallbacks = (buildParameters, dependencyData) => {
@@ -64,10 +64,11 @@ namespace UTJ
         ReturnCode PostPacking(IBuildParameters buildParameters, IDependencyData dependencyData, IWriteData writeData)
         {
             var settings = AddressableAssetSettingsDefaultObject.Settings;
-            HashSet<ObjectIdentifier> usedAssets = new ();
             var buildTarget = EditorUserBuildSettings.activeBuildTarget;
-            
-            // Explicit Group
+            HashSet<ObjectIdentifier> usedAssets = new ();
+
+            // Explicit Groupのエントリから使用されるAssetを抽出
+            // 参照されているAssetが欲しいのでGUIDではなくObjectIdentifier
             foreach (var group in settings.groups)
             {
                 // 自動生成したSharedGroupを除外、prefixの"+"で弾いてもいいが
@@ -78,7 +79,6 @@ namespace UTJ
                 {
                     if (entry.IsScene)
                     {
-                        AddressableAssetsBuildContext aaContext;
                         var buildSettings = buildParameters.GetContentBuildSettings();
                         var usageTags = new BuildUsageTagSet();
                         var sceneInfo = ContentBuildInterface.CalculatePlayerDependenciesForScene(entry.AssetPath, buildSettings, usageTags, dependencyData.DependencyUsageCache);
@@ -112,7 +112,12 @@ namespace UTJ
                     }
                 }
             }
-
+            
+            // bundleに含まれるObjectIdentiferから参照をもたないもの（利用されていないもの）を除外する
+            // 主としてfbxのRig, Avator, Mesh, Material等を目的とする
+            // NOTE: fbxはコンテナ扱いなので必要なSubAssetの重複を解決する為にfbxをエントリすると使用しないSubAssetまでついてくる
+            //       特にRigのGameObject/Transformはロード時にMain ThreadのPreloadManager.EarlyUpdateにてヒッチを起こす原因となる
+            //       AnimationClip用のfbxを多用するケースにおいて不要なRigが対象に含まれシームレスロードのブロックとなった
             foreach (var op in writeData.WriteOperations)
             {
                 // AssetBundleWriteOperation以外は不要
@@ -127,7 +132,7 @@ namespace UTJ
                             {
                                 info.includedObjects.RemoveAt(i);
                                 --i;
-            
+                                
                                 var instance = ObjectIdentifier.ToObject(objId);
                                 var path = AssetDatabase.GUIDToAssetPath(objId.guid);
                                 Debug.Log($"Removed IncludedObjects ---- {path} : {instance.name}[{instance.GetType()}]");
