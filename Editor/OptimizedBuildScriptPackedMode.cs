@@ -10,6 +10,7 @@ using UnityEngine;
 using System.IO;
 using System.Text;
 using System.Collections.Generic;
+using UnityEditor.AddressableAssets.Settings.GroupSchemas;
 
 namespace UTJ
 {
@@ -72,7 +73,10 @@ namespace UTJ
             foreach (var group in settings.groups)
             {
                 // 自動生成したSharedGroupを除外、prefixの"+"で弾いてもいいが
-                if (group.ReadOnly)
+                var schema = group.GetSchema<BundledAssetGroupSchema>();
+                var includeInCatalog = schema.IncludeAddressInCatalog || schema.IncludeGUIDInCatalog ||
+                                       schema.IncludeLabelsInCatalog;
+                if (group.ReadOnly || !includeInCatalog)
                     continue;
 
                 foreach (var entry in group.entries)
