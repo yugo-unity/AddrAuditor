@@ -21,6 +21,15 @@ namespace UTJ
         public override string Name => "Optimized Build Script";
         //AddressableAssetsBuildContext aaContext;
 
+        public override void ClearCachedData()
+        {
+            // Default Build Scriptにした際にコールバックが残ってしまう
+            Debug.LogWarning("Clear BuildCallbacks-------------");
+            ContentPipeline.BuildCallbacks.PostPackingCallback = null;
+            ContentPipeline.BuildCallbacks.PostWritingCallback = null;
+            
+            base.ClearCachedData();
+        }
 
         protected override string ProcessGroup(AddressableAssetGroup assetGroup, AddressableAssetsBuildContext aaContext)
         {
@@ -28,12 +37,10 @@ namespace UTJ
             
             // 毎度フルビルド前提でAssetBundleを更新する前提の場合、TypeTreeを無効化することでbundleデータを削減できる
             // NOTE: TypeTreeを削除した場合Editorでもロードできなくなるので注意
-#if !DEBUG
             ContentPipeline.BuildCallbacks.PostScriptsCallbacks = (buildParameters, dependencyData) => {
                 buildParameters.ContentBuildFlags |= ContentBuildFlags.DisableWriteTypeTree;
                 return ReturnCode.Success;
             };
-#endif
 
             ContentPipeline.BuildCallbacks.PostPackingCallback = PostPacking;
             //ContentPipeline.BuildCallbacks.PostWritingCallback = PostWriting;

@@ -1,5 +1,5 @@
 /***********************************************************************************************************
- * AddrExtendUtility.cs
+ * AddrUtility.cs
  * Copyright (c) Yugo Fujioka - Unity Technologies Japan K.K.
  *
  * Licensed under the Unity Companion License for Unity-dependent projects--see Unity Companion License.
@@ -19,7 +19,6 @@ using UnityEditor.Build.Pipeline;
 using UnityEditor.Build.Pipeline.Tasks;
 using UnityEditor.Build.Pipeline.Interfaces;
 using UnityEditor.Experimental.GraphView;
-using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.AddressableAssets.Settings.GroupSchemas;
 using UnityEditor.AddressableAssets.Build.DataBuilders;
@@ -230,6 +229,38 @@ namespace UTJ
         #region UI HELPER
         const float HELPBOX_HEIGHT = 50f;
         const float BUTTON_HEIGHT = 50f;
+        
+        public delegate bool IsPathCallback(string path);
+        public static IsPathCallback IsPathValidForEntry;
+        public static void ReloadInternalAPI()
+        {
+            // Utilityの取得
+            if (IsPathValidForEntry == null)
+            {
+                var aagAssembly = typeof(AddressableAssetGroup).Assembly;
+                var aauType = aagAssembly.GetType("UnityEditor.AddressableAssets.Settings.AddressableAssetUtility");
+                var validMethod = aauType.GetMethod("IsPathValidForEntry",
+                    BindingFlags.Static | BindingFlags.NonPublic,
+                    null, new System.Type[] { typeof(string) }, null);
+                if (validMethod != null)
+                {
+                    IsPathValidForEntry =
+                        System.Delegate.CreateDelegate(typeof(IsPathCallback), validMethod) as IsPathCallback;
+                }
+                else
+                {
+                    Debug.LogError("Failed Reflection - IsPathValidForEntry ");
+                }
+            }
+            // // 圧縮されたテクスチャのファイルサイズ取得
+            // var editorAssembly = typeof(TextureImporter).Assembly;
+            // var utilType = editorAssembly.GetType("UnityEditor.TextureUtil");
+            // var utilMethod = utilType.GetMethod("GetStorageMemorySizeLong",
+            //     BindingFlags.Static | BindingFlags.Public, null, new System.Type[] { typeof(Texture) }, null);
+            // this.GetStorageMemorySizeLong =
+            //     System.Delegate.CreateDelegate(typeof(GetMemorySizeLongCallback), utilMethod) as
+            //         GetMemorySizeLongCallback;
+        }
 
         public static void CreateHelpBox(VisualElement root, string text)
         {
@@ -238,17 +269,18 @@ namespace UTJ
             root.Add(helpbox);
         }
 
-        public static void CreateSpace(VisualElement root)
+        public static void CreateSpace(VisualElement root, float ratio = 1f)
         {
             var box = new Box();
-            box.style.height = new Length(10f, LengthUnit.Pixel);
+            box.style.height = new Length(10f * ratio, LengthUnit.Pixel);
             root.Add(box);
         }
 
-        public static Button CreateButton(VisualElement root, string text)
+        public static Button CreateButton(VisualElement root, string text, string tooltip = null)
         {
             var button = new Button();
             button.text = text;
+            button.tooltip = tooltip;
             button.style.height = new Length(BUTTON_HEIGHT, LengthUnit.Pixel);
             root.Add(button);
 
@@ -415,5 +447,54 @@ namespace UTJ
                 new BundleBuildContent(allBundleInputDefs),
                 out var buildResults, buildTasks, aaContext);
         }
+        
+
+        #region SORTING
+        
+        static readonly System.Text.RegularExpressions.Regex NUM_REGEX = new System.Text.RegularExpressions.Regex(@"[^0-9]");
+        public static string defaultGroupGuid = "";
+
+        /// <summary>
+        /// Addressables Groupのalphanumericソート
+        /// </summary>
+        public static int CompareGroup(AddressableAssetGroup a, AddressableAssetGroup b)
+        {
+            // Legacy...
+            // if (a.name == "Built In Data")
+            //     return -1;
+            // if (b.name == "Built In Data")
+            //     return 1;
+            
+            //if (a.IsDefaultGroup()) // 内部でソート中のgroupsを毎回検索するのでおかしくなる
+            if (a.Guid == defaultGroupGuid)
+                return -1;
+            //if (b.IsDefaultGroup())
+            if (b.Guid == defaultGroupGuid)
+                return 1;
+            //if (a.ReadOnly && !b.ReadOnly)
+            //    return 1;
+            //if (!a.ReadOnly && b.ReadOnly)
+            //    return -1;
+            if (a.name[0] == '+' && b.name[0] != '+')
+                return 1;
+            if (a.name[0] != '+' && b.name[0] == '+')
+                return -1;
+
+            var ret = string.CompareOrdinal(a.name, b.name);
+            // 桁数の違う数字を揃える
+            var regA = NUM_REGEX.Replace(a.name, "");
+            var regB = NUM_REGEX.Replace(b.name, "");
+            if ((regA.Length > 0 && regB.Length > 0) && regA.Length != regB.Length)
+            {
+                if (ret > 0 && regA.Length < regB.Length)
+                    return -1;
+                else if (ret < 0 && regA.Length > regB.Length)
+                    return 1;
+            }
+
+            return ret;
+        }
+        
+        #endregion
     }
 }

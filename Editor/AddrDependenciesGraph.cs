@@ -31,16 +31,6 @@ namespace UTJ
     /// </summary>
     internal class AddrDependenciesGraph : EditorWindow
     {
-
-        [MenuItem("UTJ/ADDR Dependencies Graph")]
-        public static void Open()
-        {
-            var window = GetWindow<AddrDependenciesGraph>();
-            window.titleContent = new GUIContent("ADDR Dependencies Graph");
-            window.minSize = new Vector2(400f, 450f);
-            window.Show();
-        }
-
         private GraphView graphView = null;
         private DependenciesRule bundleRule = new ();
 
@@ -79,6 +69,7 @@ namespace UTJ
                 value => value.name,
                 value => value.name);
             selectedGroupFiled.name = "SelectedGroup";
+            selectedGroupFiled.tooltip = "表示するグループ\n\n The group what you want to analyze.";
             mainBox.Add(selectedGroupFiled);
 
             // Select Entry
@@ -88,30 +79,34 @@ namespace UTJ
                 value => value == null ? "all" : value.address,
                 value => value == null ? "all" : value.address);
             selectedEntryField.name = "SelectedEntry";
+            selectedEntryField.tooltip = "指定グループの中の特定のエントリに表示範囲を限定します\n\n The specific entry in the group what you want to analyze.";
             mainBox.Add(selectedEntryField);
 
             // Options
+            var residentNoteToggle = AddrUtility.CreateToggle(mainBox,
+                "Visible Resident Groups",
+                "常駐アセットグループを表示します。\n\n If disabled, resident nodes are hidden.",
+                true);
             var sharedNodeToggle = AddrUtility.CreateToggle(mainBox,
-                "Visible Shared Nodes",
-                "自動生成されたSharedグループを表示します。依存関係が複雑な場合は時間がかかるので注意してください。",
-                false);
+                "Visible Shared Groups",
+                "自動生成されたSharedグループを表示します。\n\n If disabled, shared nodes that are created automatically are hidden.",
+                true);
             var shaderNodeToggle = AddrUtility.CreateToggle(mainBox,
-                "Visible Shader Nodes",
-                "自動生成されたShaderグループを表示します。Shader数が多いプロジェクトでは表示負荷が高いので注意してください",
-                false);
+                "Visible Shader Group",
+                "自動生成されたShaderグループを表示します。\n\n If disabled, shader node that are created automatically is hidden.",
+                true);
             var depthRoot = new VisualElement();
             depthRoot.style.flexDirection = FlexDirection.Row;
-            depthRoot.style.justifyContent = Justify.SpaceBetween;
-            depthRoot.style.alignItems = Align.Center;
             mainBox.Add(depthRoot);
+            const int defaultDepth = 0;
             var depthSlider = AddrUtility.CreateSliderInt(depthRoot,
                 "Visible Depth",
-                "依存関係の表示制限をかけます。Asset単位での依存関係を表示する際に便利です。0で無効となります。",
-                1, 0, 3);
+                "依存関係の表示制限です。0で無効となります。\n\n Limit the number of dependency recursions. 0 means no limit.",
+                defaultDepth, 0, 5);
             depthSlider.style.width = 250f;
             var depthInteger = AddrUtility.CreateInteger(depthRoot,
                 string.Empty, string.Empty,
-                1);
+                defaultDepth);
             depthInteger.style.width = 30f;
             depthInteger.RegisterValueChangedCallback((ev) =>
             {
@@ -122,7 +117,7 @@ namespace UTJ
             depthSlider.RegisterValueChangedCallback((ev) => { depthInteger.SetValueWithoutNotify(ev.newValue); });
             this.CreateStringList(mainBox,
                 "Ignore Keyword",
-                "特定の文字列をグループ名に含む場合にノード表示を省略します。常駐グループを表示しない場合に設定してください。");
+                "特定の文字列をグループ名に含む場合にノード表示を省略します。\n\n Hide the groups if their name contain string here.");
 
             // Groupが変更されたらEntryのリストを更新
             selectedGroupFiled.RegisterCallback<ChangeEvent<AddressableAssetGroup>>((ev) =>
@@ -139,9 +134,8 @@ namespace UTJ
 
             // Clear Analysis Button
             {
-                AddrUtility.CreateHelpBox(mainBox, "Analyze結果をクリアします\nGroup設定の変更を反映する際に必要です");
-
-                AddrUtility.CreateButton(mainBox, "Clear Addressables Analysis").clicked += () =>
+                var button = AddrUtility.CreateButton(mainBox, "Clear Addressables Analysis");
+                button.clicked += () =>
                 {
                     this.bundleRule.Clear();
                     if (this.graphView != null)
@@ -150,6 +144,8 @@ namespace UTJ
                         this.graphView = null;
                     }
                 };
+                button.tooltip = "設定やエントリが更新された際にキャッシュをクリアしてください。\n\n" +
+                                 "You should clear the cache if settings or entries are updated.";
             }
 
             // Space
@@ -157,9 +153,8 @@ namespace UTJ
 
             // Bundle-Dependencies Button
             {
-                AddrUtility.CreateHelpBox(mainBox, "AssetBundleの依存関係を表示します\n暗黙でロードされるbundleを確認できます");
-
-                AddrUtility.CreateButton(mainBox, "View Bundle-Dependencies").clicked += () =>
+                var button = AddrUtility.CreateButton(mainBox, "View Bundle-Dependencies");
+                button.clicked += () =>
                 {
                     this.rootVisualElement.Remove(mainBox);
                     if (this.graphView != null)
@@ -178,6 +173,8 @@ namespace UTJ
                     this.rootVisualElement.Add(this.graphView);
                     this.rootVisualElement.Add(mainBox);
                 };
+                button.tooltip = "暗黙的にロードされるAssetBundleを確認できます\n\n" +
+                                 "You can check assetbundles that are loaded implicitly.";
             }
 
             // Space
@@ -185,9 +182,8 @@ namespace UTJ
 
             // Asset-Dependencies Button
             {
-                AddrUtility.CreateHelpBox(mainBox, "AssetBundleに含まれるAssetの依存関係を表示します\n意図しない参照を見つけることができます");
-
-                AddrUtility.CreateButton(mainBox, "View Asset-Dependencies").clicked += () =>
+                var button = AddrUtility.CreateButton(mainBox, "View Asset-Dependencies");
+                button.clicked += () =>
                 {
                     this.rootVisualElement.Remove(mainBox);
                     if (this.graphView != null)
@@ -206,7 +202,11 @@ namespace UTJ
                     this.rootVisualElement.Add(this.graphView);
                     this.rootVisualElement.Add(mainBox);
                 };
+                button.tooltip = "AssetBundleに含まれるAssetの依存関係を表示します\n\n" +
+                                 "You can check dependencies between assets.";
             }
+
+            AddrUtility.CreateSpace(mainBox);
         }
 
         void CreateStringList(VisualElement root, string title, string tooltip)
@@ -227,12 +227,12 @@ namespace UTJ
                 showBoundCollectionSize = false,
                 makeItem = () =>
                 {
-                    var root = new BindableElement();
+                    var element = new VisualElement();
                     var textField = new TextField
                     {
                         bindingPath = "text",
                     };
-                    root.Add(textField);
+                    element.Add(textField);
                     return root;
                 }
             };
@@ -255,22 +255,6 @@ namespace UTJ
             public List<AssetBundleBuild> allBundleInputDefs { get; private set; }
 
             public delegate bool IsPathCallback(string path);
-            public static IsPathCallback IsPathValidForEntry;
-
-            public DependenciesRule()
-            {
-                // Utilityの取得
-                if (IsPathValidForEntry == null)
-                {
-                    var aagAssembly = typeof(AddressableAssetGroup).Assembly;
-                    var aauType = aagAssembly.GetType("UnityEditor.AddressableAssets.Settings.AddressableAssetUtility");
-                    var validMethod = aauType.GetMethod("IsPathValidForEntry",
-                        BindingFlags.Static | BindingFlags.NonPublic,
-                        null, new System.Type[] { typeof(string) }, null);
-                    IsPathValidForEntry =
-                        System.Delegate.CreateDelegate(typeof(IsPathCallback), validMethod) as IsPathCallback;
-                }
-            }
 
             public void Execute()
             {
@@ -418,7 +402,6 @@ namespace UTJ
                 }
 
                 // NOTE: レイアウトが一旦完了しないとノードサイズがとれないのでViewの描画前コールバックに仕込む
-                var position = new Vector2(0f, 50f);
                 this.RegisterCallback<GeometryChangedEvent>((ev) =>
                 {
                     var position = new Vector2(400f, 50f);
@@ -438,7 +421,7 @@ namespace UTJ
 
             bool IsShaderGroupNode(BundleNode node)
             {
-                return node.title.Contains(AddrExtendAutoGrouping.SHADER_GROUP_NAME);
+                return node.title.Contains(AddrAutoGrouping.SHADER_GROUP_NAME);
             }
 
             bool IsBuiltInShaderNode(BundleNode node)
@@ -591,7 +574,7 @@ namespace UTJ
                     }
 
                     // 依存グループ無視
-                    if (!this.enabledSharedNode && title.Contains("Shared-"))
+                    if (!this.enabledSharedNode && title.Contains(AddrAutoGrouping.SHARED_GROUP_NAME))
                         return null;
                 }
 
@@ -969,7 +952,7 @@ namespace UTJ
 
                         // スクリプトだとかを除外
                         var parentPath = AssetDatabase.GUIDToAssetPath(parentObj.guid);
-                        if (!DependenciesRule.IsPathValidForEntry(parentPath))
+                        if (!AddrUtility.IsPathValidForEntry(parentPath))
                             continue;
                         // Prefabは依存関係にならないので除外
                         if (parentPath.Contains(".prefab"))

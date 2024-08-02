@@ -3,7 +3,10 @@ using UnityEngine;
 
 namespace UTJ
 {
-    public class AddrExtendGroupingSettings : ScriptableObject
+    /// <summary>
+    /// AddrAutoGroupingの設定ファイル
+    /// </summary>
+    public class AddrAutoGroupingSettings : ScriptableObject
     {
         public bool hashName = true;
         public bool shaderGroup = false;
