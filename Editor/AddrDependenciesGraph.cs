@@ -134,7 +134,10 @@ namespace UTJ
 
             // Clear Analysis Button
             {
-                var button = AddrUtility.CreateButton(mainBox, "Clear Addressables Analysis");
+                var button = AddrUtility.CreateButton(mainBox,
+                    "Clear Addressables Analysis",
+                    "設定やエントリが更新された際にキャッシュをクリアしてください。\n\n" +
+                    "You should clear the cache if settings or entries are updated.");
                 button.clicked += () =>
                 {
                     this.bundleRule.Clear();
@@ -144,8 +147,6 @@ namespace UTJ
                         this.graphView = null;
                     }
                 };
-                button.tooltip = "設定やエントリが更新された際にキャッシュをクリアしてください。\n\n" +
-                                 "You should clear the cache if settings or entries are updated.";
             }
 
             // Space
@@ -153,7 +154,10 @@ namespace UTJ
 
             // Bundle-Dependencies Button
             {
-                var button = AddrUtility.CreateButton(mainBox, "View Bundle-Dependencies");
+                var button = AddrUtility.CreateButton(mainBox, 
+                    "View Bundle-Dependencies",
+                    "暗黙的にロードされるAssetBundleを確認できます\n\n" +
+                    "You can check assetbundles that are loaded implicitly.");
                 button.clicked += () =>
                 {
                     this.rootVisualElement.Remove(mainBox);
@@ -173,8 +177,6 @@ namespace UTJ
                     this.rootVisualElement.Add(this.graphView);
                     this.rootVisualElement.Add(mainBox);
                 };
-                button.tooltip = "暗黙的にロードされるAssetBundleを確認できます\n\n" +
-                                 "You can check assetbundles that are loaded implicitly.";
             }
 
             // Space
@@ -182,7 +184,10 @@ namespace UTJ
 
             // Asset-Dependencies Button
             {
-                var button = AddrUtility.CreateButton(mainBox, "View Asset-Dependencies");
+                var button = AddrUtility.CreateButton(mainBox, 
+                    "View Asset-Dependencies",
+                    "AssetBundleに含まれるAssetの依存関係を表示します\n\n" +
+                    "You can check dependencies between assets.");
                 button.clicked += () =>
                 {
                     this.rootVisualElement.Remove(mainBox);
@@ -202,8 +207,6 @@ namespace UTJ
                     this.rootVisualElement.Add(this.graphView);
                     this.rootVisualElement.Add(mainBox);
                 };
-                button.tooltip = "AssetBundleに含まれるAssetの依存関係を表示します\n\n" +
-                                 "You can check dependencies between assets.";
             }
 
             AddrUtility.CreateSpace(mainBox);

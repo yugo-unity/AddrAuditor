@@ -1,6 +1,6 @@
 using UnityEditor;
 using UnityEditor.AddressableAssets;
-using UnityEditor.AddressableAssets.Settings;
+using UnityEditor.AddressableAssets.Build;
 using UnityEditor.AddressableAssets.Build.DataBuilders;
 using UnityEditor.Build.Content;
 using UnityEditor.Build.Pipeline;
@@ -19,22 +19,21 @@ namespace UTJ
     public class OptimizedBuildScriptPackedMode : BuildScriptPackedMode
     {
         public override string Name => "Optimized Build Script";
-        //AddressableAssetsBuildContext aaContext;
 
         public override void ClearCachedData()
         {
-            // Default Build Scriptにした際にコールバックが残ってしまう
-            Debug.LogWarning("Clear BuildCallbacks-------------");
+            // NOTE: we should clear callbacks
+            ContentPipeline.BuildCallbacks.PostScriptsCallbacks = null;
             ContentPipeline.BuildCallbacks.PostPackingCallback = null;
-            ContentPipeline.BuildCallbacks.PostWritingCallback = null;
+            //ContentPipeline.BuildCallbacks.PostWritingCallback = null;
+            
+            //Debug.LogWarning("Clear BuildCallbacks-------------"); // for checking
             
             base.ClearCachedData();
         }
-
-        protected override string ProcessGroup(AddressableAssetGroup assetGroup, AddressableAssetsBuildContext aaContext)
+        
+        protected override TResult BuildDataImplementation<TResult>(AddressablesDataBuilderInput builderInput)
         {
-            //this.aaContext = aaContext;
-            
             // 毎度フルビルド前提でAssetBundleを更新する前提の場合、TypeTreeを無効化することでbundleデータを削減できる
             // NOTE: TypeTreeを削除した場合Editorでもロードできなくなるので注意
             ContentPipeline.BuildCallbacks.PostScriptsCallbacks = (buildParameters, dependencyData) => {
@@ -43,37 +42,17 @@ namespace UTJ
             };
 
             ContentPipeline.BuildCallbacks.PostPackingCallback = PostPacking;
+            
             //ContentPipeline.BuildCallbacks.PostWritingCallback = PostWriting;
-
-            return base.ProcessGroup(assetGroup, aaContext);
+            
+            return base.BuildDataImplementation<TResult>(builderInput);
         }
-
-        // Assetの依存関係確認したいだけなのにtypeDBはいるのか？
-        // static TypeDB GetTypeDB(BuildTarget buildTarget)
-        // {
-        //     var buildTargetGroup = BuildPipeline.GetBuildTargetGroup(EditorUserBuildSettings.activeBuildTarget);
-        //     var settings = new ScriptCompilationSettings
-        //     {
-        //         target = buildTarget,
-        //         group = buildTargetGroup,
-        //         options = ScriptCompilationOptions.None,
-        //     };
-        //
-        //     // 独自じゃなくてSBPのキャッシュディレクトリ参照すればよさそう
-        //     var tempPath = ".temp/AssetBundleHelper_Compile";
-        //     if (Directory.Exists(tempPath))
-        //         Directory.Delete(tempPath, true);
-        //     var results = PlayerBuildInterface.CompilePlayerScripts(settings, tempPath);
-        //
-        //     var typeDB = results.typeDB;
-        //     return typeDB;
-        // }
 
         ReturnCode PostPacking(IBuildParameters buildParameters, IDependencyData dependencyData, IWriteData writeData)
         {
             var settings = AddressableAssetSettingsDefaultObject.Settings;
             var buildTarget = EditorUserBuildSettings.activeBuildTarget;
-            HashSet<ObjectIdentifier> usedAssets = new ();
+            var usedAssets = new HashSet<ObjectIdentifier>();
 
             // Explicit Groupのエントリから使用されるAssetを抽出
             // 参照されているAssetが欲しいのでGUIDではなくObjectIdentifier
@@ -81,8 +60,7 @@ namespace UTJ
             {
                 // 自動生成したSharedGroupを除外、prefixの"+"で弾いてもいいが
                 var schema = group.GetSchema<BundledAssetGroupSchema>();
-                var includeInCatalog = schema.IncludeAddressInCatalog || schema.IncludeGUIDInCatalog ||
-                                       schema.IncludeLabelsInCatalog;
+                var includeInCatalog = schema.IncludeAddressInCatalog || schema.IncludeGUIDInCatalog || schema.IncludeLabelsInCatalog;
                 if (group.ReadOnly || !includeInCatalog)
                     continue;
 
@@ -110,7 +88,7 @@ namespace UTJ
                             usedAssets.Add(objId);
                         
                         // NOTE: フォルダは依存関係としてSubAssetが検出されないので明示検索
-                        if (entry.IsFolder)
+                        if (entry.IsFolder && entry.SubAssets != null)
                         {
                             foreach (var subAsset in entry.SubAssets)
                             {
@@ -158,7 +136,7 @@ namespace UTJ
         }
 
         //-----------------------------------------------------------------------------
-        // AssetBundle暗号化
+        // [under consideration] Encrypt AssetBundle
         //-----------------------------------------------------------------------------
         // unsafe static void EncryptUsingAesStream(string fileName)
         // {
@@ -212,7 +190,7 @@ namespace UTJ
             File.WriteAllText(Application.dataPath + "\\AddressablesExtend\\AssetTable.cs", builder.ToString(), Encoding.UTF8);
             AssetDatabase.Refresh(ImportAssetOptions.ImportRecursive);
             
-            // // AssetBundle暗号化
+            // // to Encrypt AssetBundle
             // var bundleResults = (IBundleBuildResults)results;
             // foreach (var ret in bundleResults.BundleInfos.Values)
             //     EncryptUsingAesStream(ret.FileName);

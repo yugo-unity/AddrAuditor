@@ -1,14 +1,3 @@
-/***********************************************************************************************************
- * AddrDumpBundleName.cs
- * Copyright (c) Yugo Fujioka - Unity Technologies Japan K.K.
- * 
- * Licensed under the Unity Companion License for Unity-dependent projects--see Unity Companion License.
- * https://unity.com/legal/licenses/unity-companion-license
- * Unless expressly provided otherwise, the Software under this license is made available strictly
- * on an "AS IS" BASIS WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
- * Please review the license for details on these and other terms and conditions.
-***********************************************************************************************************/
-
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.AddressableAssets;
@@ -18,13 +7,13 @@ using UnityEngine;
 
 namespace UTJ
 {
-    internal partial class AddrAuditor : EditorWindow
+    internal partial class AddrAuditor
     {
         /// <summary>
         /// AddressablesのbundleのHashとグループ名のダンプ
         /// MemoryProfilerではHash名しかでないので照合用
         /// </summary>
-        public static void DumpBundleName()
+        static void DumpBundleName()
         {
             var settings = AddressableAssetSettingsDefaultObject.Settings;
 

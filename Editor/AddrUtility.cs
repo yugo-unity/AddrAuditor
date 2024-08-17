@@ -276,14 +276,13 @@ namespace UTJ
             root.Add(box);
         }
 
-        public static Button CreateButton(VisualElement root, string text, string tooltip = null)
+        public static Button CreateButton(VisualElement root, string text, string tooltip)
         {
             var button = new Button();
             button.text = text;
             button.tooltip = tooltip;
             button.style.height = new Length(BUTTON_HEIGHT, LengthUnit.Pixel);
             root.Add(button);
-
             return button;
         }
 
@@ -443,6 +442,7 @@ namespace UTJ
             buildTasks.Add(extractData);
 
             // TODO: BuildTaskは積んであるのでBuildTasksRunner.Runで直接読んだらまずいのか
+            //return BuildTasksRunner.Run(buildTasks, extractData.BuildContext);
             return ContentPipeline.BuildAssetBundles(buildParams,
                 new BundleBuildContent(allBundleInputDefs),
                 out var buildResults, buildTasks, aaContext);

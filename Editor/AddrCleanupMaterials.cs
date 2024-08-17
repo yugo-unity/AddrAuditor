@@ -4,13 +4,13 @@ using UnityEngine;
 
 namespace UTJ
 {
-    internal partial class AddrAuditor : EditorWindow
+    internal partial class AddrAuditor
     {
-        public static void CleanupMaterialProperty()
+        static void CleanupMaterialProperty()
         {
+            //var guids = AssetDatabase.FindAssets("t:Material"); // include Packages
             var serachFolder = new string[] { "Assets", };
-            //var guids = AssetDatabase.FindAssets("t:Material"); // Packages�܂ߑS��������
-            var guids = AssetDatabase.FindAssets("t:Material", serachFolder); // �C�Ӄf�B���N�g���w��
+            var guids = AssetDatabase.FindAssets("t:Material", serachFolder);
 
             foreach (var guid in guids)
             {
@@ -19,10 +19,9 @@ namespace UTJ
                 if (m == null || m.shader == null)
                     continue;
 
-                // Property�̎��W
                 var properties = new HashSet<string>();
                 var count = ShaderUtil.GetPropertyCount(m.shader);
-                for (int i = 0; i < count; i++)
+                for (var i = 0; i < count; i++)
                 {
                     var propName = ShaderUtil.GetPropertyName(m.shader, i);
                     properties.Add(propName);
@@ -31,7 +30,6 @@ namespace UTJ
                 var so = new SerializedObject(m);
                 var sp = so.FindProperty("m_SavedProperties");
 
-                // �e�N�X�`����Property
                 var texEnvSp = sp.FindPropertyRelative("m_TexEnvs");
                 for (var i = texEnvSp.arraySize - 1; i >= 0; i--)
                 {
@@ -41,7 +39,6 @@ namespace UTJ
                         texEnvSp.DeleteArrayElementAtIndex(i);
                 }
 
-                // float��Enum��Property
                 var floatsSp = sp.FindPropertyRelative("m_Floats");
                 for (var i = floatsSp.arraySize - 1; i >= 0; i--)
                 {
@@ -49,8 +46,15 @@ namespace UTJ
                     if (!properties.Contains(propName))
                         floatsSp.DeleteArrayElementAtIndex(i);
                 }
+                
+                var intSp = sp.FindPropertyRelative("m_Ints");
+                for (var i = intSp.arraySize - 1; i >= 0; i--)
+                {
+                    var propName = intSp.GetArrayElementAtIndex(i).FindPropertyRelative("first").stringValue;
+                    if (!properties.Contains(propName))
+                        intSp.DeleteArrayElementAtIndex(i);
+                }
 
-                // Color��Property
                 var colorsSp = sp.FindPropertyRelative("m_Colors");
                 for (var i = colorsSp.arraySize - 1; i >= 0; i--)
                 {

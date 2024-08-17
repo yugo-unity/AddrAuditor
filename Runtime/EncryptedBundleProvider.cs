@@ -371,37 +371,4 @@ namespace UTJ
                 dest[i] = (byte)s[i];
         }
     }
-    
-#if UNITY_EDITOR
-    // ensure class initializer is called whenever scripts recompile
-    [UnityEditor.InitializeOnLoadAttribute]
-    public static class PlayModeStateChanged
-    {
-        // register an event handler when the class is initialized
-        static PlayModeStateChanged()
-        {
-            UnityEditor.EditorApplication.playModeStateChanged += ClearAddressableProviders;
-        }
-
-        private static void ClearAddressableProviders(UnityEditor.PlayModeStateChange state)
-        {
-            if (state == UnityEditor.PlayModeStateChange.ExitingPlayMode)
-            {
-                foreach (var op in EncryptedBundleProvider.s_ActiveResources.Values)
-                {
-                    if (!op.isValid)
-                        continue;
-                    op.Unload(false);
-                    op.Dispose();
-                }
-                foreach (var op in EncryptedBundleProvider.s_ResourcePool)
-                    op.Dispose();
-                EncryptedBundleProvider.s_UnloadingBundles.Clear();
-                EncryptedBundleProvider.s_ResourcePool.Clear();
-                EncryptedBundleProvider.s_ActiveResources.Clear();
-                Debug.Log("Released bundles in EncryptedBundleProvider");
-            }
-        }
-    }
-#endif
 }

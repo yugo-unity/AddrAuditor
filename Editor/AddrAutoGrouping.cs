@@ -1,15 +1,3 @@
-/***********************************************************************************************************
- * AddrAutoGrouping.cs
- * Copyright (c) Yugo Fujioka - Unity Technologies Japan K.K.
- * 
- * Licensed under the Unity Companion License for Unity-dependent projects--see Unity Companion License.
- * https://unity.com/legal/licenses/unity-companion-license
- * Unless expressly provided otherwise, the Software under this license is made available strictly
- * on an "AS IS" BASIS WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
- * Please review the license for details on these and other terms and conditions.
-***********************************************************************************************************/
-
-using System.Reflection;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.AddressableAssets;
@@ -39,9 +27,6 @@ namespace UTJ
         // delegate long GetMemorySizeLongCallback(Texture tex);
         // GetMemorySizeLongCallback GetStorageMemorySizeLong = null;
 
-        /// <summary>
-        /// SharedAssetグループの情報
-        /// </summary>
         class SharedGroupParam
         {
             public SharedGroupParam(string name, List<string> bundles)
@@ -51,28 +36,22 @@ namespace UTJ
             }
 
             public readonly string name;
-            public readonly List<string> bundles; // 依存先のbundle
-            public readonly List<ImplicitParam> implicitParams = new(); // 含まれる暗黙のAsset
+            public readonly List<string> bundles; // referenced bundles
+            public readonly List<ImplicitParam> implicitParams = new(); // info of contained assets
         }
 
-        /// <summary>
-        /// 暗黙の依存Assetの収集情報
-        /// </summary>
         class ImplicitParam
         {
             public string guid;
             public string path;
-            public bool isSubAsset; // SubAssetかどうか
-            public bool isResident; // 常駐アセットか
-            public List<System.Type> usedType; // 使用されているSubAssetの型（fbxと用）
+            public bool isSubAsset;
+            public bool isResident;
+            public List<System.Type> usedSubAssetTypes;
 
-            public List<string> bundles; // 参照されているBundle
-            //public long fileSize; // Assetのファイルサイズ
+            public List<string> bundles; // referenced Bundles
+            //public long fileSize;
         }
 
-        /// <summary>
-        /// SpriteAtlasの収集情報
-        /// </summary>
         class SpriteAtlasParam
         {
             public bool isResident;
@@ -80,7 +59,7 @@ namespace UTJ
         }
 
         /// <summary>
-        /// 自動生成されたGroupかどうか
+        /// whether a group what is created automatically
         /// </summary>
         /// <param name="group">Addressables Group</param>
         public static bool IsAutoGroup(AddressableAssetGroup group)
@@ -92,10 +71,10 @@ namespace UTJ
         }
 
         /// <summary>
-        /// 重複アセット解決の実行
+        /// resolve duplicated assets
         /// </summary>
-        /// <param name="groupingSettings">自動グルーピング設定</param>
-        /// <returns>再帰処理するか</returns>
+        /// <param name="groupingSettings">settings for grouping automatically</param>
+        /// <returns>whether it needs to recurse process</returns>
         public static bool Execute(AddrAutoGroupingSettings groupingSettings)
         {
             var settings = AddressableAssetSettingsDefaultObject.Settings;
@@ -103,14 +82,12 @@ namespace UTJ
             // // 単品のbundleにするAssetのファイルサイズの閾値
             // var SEPARATE_ASSET_SIZE = (long)groupingSettings.singleThreshold * 1024L;
 
-            // Analyze共通処理
             if (!BuildUtility.CheckModifiedScenesAndAskToSave())
             {
                 Debug.LogError("Cannot run Analyze with unsaved scenes");
                 return false;
             }
 
-            //var exitCode = AddrUtility.CalculateBundleWriteData(out var aaContext, out var extractData);
             var allBundleInputDefs = new List<AssetBundleBuild>();
             var bundleToAssetGroup = new Dictionary<string, string>();
             AddrUtility.CalculateInputDefinitions(settings, allBundleInputDefs, bundleToAssetGroup);
@@ -123,12 +100,8 @@ namespace UTJ
                 return false;
             }
 
-            // 暗黙の依存Asset情報を抽出
-            var (implicitParams, atlases) =
-                CollectImplicitParams(aaContext.bundleToAssetGroup, extractData.WriteData, groupingSettings);
-
-            // 既に配置されてるSharedAssetグループ数
-            var sharedGroupCount = settings.groups.FindAll(group => group.name.Contains(SHARED_GROUP_NAME)).Count;
+            // get implicit assets
+            var (implicitParams, atlases) = CollectImplicitParams(aaContext.bundleToAssetGroup, extractData.WriteData, groupingSettings);
 
             var sharedGroupParams = new List<SharedGroupParam>();
             var shaderGroupParam = new SharedGroupParam(SHADER_GROUP_NAME, null);
@@ -137,27 +110,24 @@ namespace UTJ
 
             foreach (var implicitParam in implicitParams)
             {
-                // 重複している常駐アセットは一つのGroupにまとめる
+                // put them in the same group if resident assets
                 var residentAsset = implicitParam.isResident && implicitParam.bundles.Count > 1;
 
-                // Spriteはかなり例外処理なのでSpriteAtlas確認が必要
-                if (implicitParam.usedType.Contains(typeof(Sprite)))
+                // SpriteAtlas confirmation is required, because Sprite assets needs exception handling 
+                if (implicitParam.usedSubAssetTypes.Contains(typeof(Sprite)))
                 {
                     var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(implicitParam.path);
                     var packed = false;
                     foreach (var atlas in atlases)
                     {
-                        // NOTE: SpriteAtlasに含まれているどうかがインスタンスでないとわからない...？
+                        // AFAK no way to find SpriteAtlas contains a Sprite before instancing
                         if (atlas.instance.CanBindTo(sprite))
                         {
-                            // NOTE: SpriteAtlasに含まれているSpriteは無視
-                            packed = implicitParam.usedType.Count == 1;
-                            // NOTE: SpriteAtlasに含まれているSpriteの元テクスチャが参照されている、かつ
-                            //       元テクスチャは常駐アセットと依存関係を持たない場合、
-                            //       SpriteAtlasが常駐なら元Textureも常駐扱いとする
-                            //       結局常駐グループに依存関係を持つため循環参照により不要なbundleが生成されてしまうのを避ける
+                            // Sprite is not implicit assets if SpriteAtlas contains it
+                            packed = implicitParam.usedSubAssetTypes.Count == 1;
+                            // WARNING: If the original texture of a Sprite that is contained in SpriteAtlas is referenced,
+                            //          the original texture is treated as a resident asset if the SpriteAtlas is resident.
                             residentAsset |= atlas.isResident;
-
                             break;
                         }
                     }
@@ -172,12 +142,11 @@ namespace UTJ
                     continue;
                 }
 
-                // Shader検出
-                // NOTE: 常駐のShaderは常駐グループにまとめられる
+                // support Shader Group
+                // NOTE: shaders as resident assets, Resident group contains them
                 if (groupingSettings.shaderGroup)
                 {
-                    // Shaderグループにまとめる
-                    var assetType = implicitParam.usedType[0];
+                    var assetType = implicitParam.usedSubAssetTypes[0];
                     if (assetType == typeof(Shader))
                     {
                         shaderGroupParam.implicitParams.Add(implicitParam);
@@ -192,22 +161,22 @@ namespace UTJ
                 //     continue;
                 // }
 
-                // 非重複Assetは何もしない
+                // ignore implicit assets that is not duplicated
                 if (implicitParam.bundles.Count == 1)
                     continue;
 
-                // 既存検索
-                var hit = sharedGroupParams.Count > 0; // 初回対応
+                var hit = sharedGroupParams.Count > 0;
+                // find existed shared groups
                 foreach (var groupParam in sharedGroupParams)
                 {
-                    // まず依存数（重複数）が違う
+                    // no match referenced count
                     if (groupParam.bundles.Count != implicitParam.bundles.Count)
                     {
                         hit = false;
                         continue;
                     }
 
-                    // 依存先（重複元）が同一のbundleか
+                    // confirm all bundles are the same 
                     hit = true;
                     foreach (var bundle in implicitParam.bundles)
                     {
@@ -217,7 +186,6 @@ namespace UTJ
                             break;
                         }
                     }
-
                     if (hit)
                     {
                         groupParam.implicitParams.Add(implicitParam);
@@ -225,7 +193,7 @@ namespace UTJ
                     }
                 }
 
-                // 新規Group
+                // no match, create new group
                 if (!hit)
                 {
                     var param = new SharedGroupParam(SHARED_GROUP_NAME + "{0}", implicitParam.bundles);
@@ -236,21 +204,22 @@ namespace UTJ
 
             var continued = sharedGroupParams.Count > 0;
 
-            // 常駐グループ
+            // Resident Group
             if (residentGroupParam.implicitParams.Count > 0)
                 sharedGroupParams.Add(residentGroupParam);
 
-            // Shaderグループ
+            // Shader Group
             if (groupingSettings.shaderGroup)
                 sharedGroupParams.Add(shaderGroupParam);
 
-            // 単一Group振り分け
+            // assign to the group that has Packed Separately setting
             var singleGroup = CreateSharedGroup(settings, SINGLE_GROUP_NAME, groupingSettings.hashName);
             var schema = singleGroup.GetSchema<BundledAssetGroupSchema>();
             schema.BundleMode = BundledAssetGroupSchema.BundlePackingMode.PackSeparately;
             CreateOrMoveEntry(settings, singleGroup, singleGroupParam);
 
-            // Group振り分け
+            // assign to groups
+            var sharedGroupCount = settings.groups.FindAll(group => group.name.Contains(SHARED_GROUP_NAME)).Count;
             foreach (var groupParam in sharedGroupParams)
             {
                 // 1個しかAssetがないGroupは単一グループにまとめる
@@ -266,11 +235,11 @@ namespace UTJ
                 CreateOrMoveEntry(settings, group, groupParam);
             }
 
-            // 空だったら不要
+            // delete empty group
             if (singleGroup.entries.Count == 0)
                 settings.RemoveGroup(singleGroup);
 
-            // alphanumericソート
+            // sort alphanumerically
             settings.groups.Sort(AddrUtility.CompareGroup);
             settings.SetDirty(AddressableAssetSettings.ModificationEvent.EntryModified, eventData: null,
                 postEvent: true, settingsModified: true);
@@ -284,7 +253,7 @@ namespace UTJ
         static AddressableAssetGroup CreateSharedGroup(AddressableAssetSettings settings, string groupName,
             bool useHashName)
         {
-            // Shared-SingleとShared-Shaderは単一
+            // Shared-Single and Shared-Shader group are the unique group
             var group = settings.FindGroup(groupName);
             if (group == null)
             {
@@ -303,17 +272,16 @@ namespace UTJ
             if (schema == null)
                 schema = group.AddSchema<BundledAssetGroupSchema>();
 
-            // NOTE: 必ず無効にしないと反映されない
+            // NOTE: must be disabled to apply
             schema.UseDefaultSchemaSettings = false;
 
-            // NOTE: 依存Assetなのでcatalogに登録は省略（catalog.jsonの削減）
+            // NOTE: no need to include in catalog, it is good for reducing catalog size
             schema.IncludeAddressInCatalog = false;
             schema.IncludeGUIDInCatalog = false;
             schema.IncludeLabelsInCatalog = false;
 
             schema.BundleMode = BundledAssetGroupSchema.BundlePackingMode.PackTogether;
-            schema.AssetLoadMode = UnityEngine.ResourceManagement.ResourceProviders.AssetLoadMode
-                .AllPackedAssetsAndDependencies;
+            schema.AssetLoadMode = UnityEngine.ResourceManagement.ResourceProviders.AssetLoadMode.AllPackedAssetsAndDependencies;
             schema.InternalBundleIdMode = BundledAssetGroupSchema.BundleInternalIdMode.GroupGuid;
             schema.InternalIdNamingMode = BundledAssetGroupSchema.AssetNamingMode.Dynamic;
             schema.UseAssetBundleCrc = schema.UseAssetBundleCache = false;
@@ -326,10 +294,9 @@ namespace UTJ
         }
 
         /// <summary>
-        /// 指定Groupへエントリ
+        /// Create Entry to specified group
         /// </summary>
-        static void CreateOrMoveEntry(AddressableAssetSettings settings, AddressableAssetGroup group,
-            SharedGroupParam groupParam)
+        static void CreateOrMoveEntry(AddressableAssetSettings settings, AddressableAssetGroup group, SharedGroupParam groupParam)
         {
             foreach (var implicitParam in groupParam.implicitParams)
             {
@@ -340,10 +307,9 @@ namespace UTJ
         }
 
         /// <summary>
-        /// 暗黙の依存Assetを抽出して情報をまとめる
+        /// find duplicated implicit assets and get the info
         /// </summary>
-        static (List<ImplicitParam>, List<SpriteAtlasParam>) CollectImplicitParams(
-            Dictionary<string, string> bundleToAssetGroup,
+        static (List<ImplicitParam>, List<SpriteAtlasParam>) CollectImplicitParams(Dictionary<string, string> bundleToAssetGroup,
             IBundleWriteData writeData, AddrAutoGroupingSettings groupingSettings)
         {
             var settings = AddressableAssetSettingsDefaultObject.Settings;
@@ -352,43 +318,43 @@ namespace UTJ
 
             foreach (var fileToBundle in writeData.FileToBundle)
             {
-                if (writeData.FileToObjects.TryGetValue(fileToBundle.Key, out var objects))
+                if (writeData.FileToObjects.TryGetValue(fileToBundle.Key, out var objectIdList))
                 {
-                    // NOTE: 参照が全てくるので同一ファイルから複数の参照がくる
-                    foreach (var objectId in objects)
+                    // NOTE: there are multiple references from the same file 
+                    foreach (var objectId in objectIdList)
                     {
                         var guid = objectId.guid;
 
-                        // EntryされてるExplicit Assetなら無視
+                        // ignore explicit assets that have been registered in groups
                         if (writeData.AssetToFiles.ContainsKey(guid))
                             continue;
 
-                        // Group検索
+                        // find the group
                         var bundle = fileToBundle.Value;
-                        // NOTE: Built-in Shadersはグループが見つからない
+                        // NOTE: cannot found the Built-in Shaders group
                         if (!bundleToAssetGroup.TryGetValue(bundle, out var groupGuid))
                             continue;
                         var path = AssetDatabase.GUIDToAssetPath(guid);
 
-                        // Resourcesがエントリされている場合は警告するが許容する
-                        // NOTE: 多くのプロジェクトでTextMeshProが利用されるがTextMeshProがResources前提で設計されるので許容せざるを得ない
+                        // allow to entry Resources assets, but outputting warning log
+                        // NOTE: TextMeshPro has a legacy structure that depends on Resources
                         if (!AddrUtility.IsPathValidForEntry(path))
                             continue;
                         if (path.Contains("/Resources/"))
                         {
                             var selectedGroup = settings.FindGroup(g => g.Guid == groupGuid);
-                            Debug.LogWarning($"Resources is duplicated. - {path} / Group : {selectedGroup.name}");
+                            Debug.LogWarning($"Resources Asset is duplicated. - {path} / Group : {selectedGroup.name}");
                         }
 
-                        // Lightmapはシーンに依存するので無視
+                        // ignore Lightmap assets because it depends on Scene asset
                         if (path.Contains("Lightmap-"))
                             continue;
 
-                        // NOTE: PostProcessingVolumeやPlayableなどインスタンスがないアセットが存在
+                        // NOTE: there are assets that have no type (PostProcessingVolume, Playable, ...)
                         var instance = ObjectIdentifier.ToObject(objectId);
                         var type = instance != null ? instance.GetType() : null;
 
-                        // NOTE: Materialはファイルサイズが小さいので重複を許容して過剰なbundleを避ける
+                        // NOTE: Material assets are very tiny, to reduce excessive bundle dependencies by allowing duplication
                         if (groupingSettings.allowDuplicatedMaterial)
                         {
                             if (type == typeof(Material))
@@ -400,8 +366,8 @@ namespace UTJ
 
                         if (validImplicitGuids.TryGetValue(guid, out var param))
                         {
-                            if (type != null && !param.usedType.Contains(type))
-                                param.usedType.Add(type);
+                            if (type != null && !param.usedSubAssetTypes.Contains(type))
+                                param.usedSubAssetTypes.Add(type);
                             if (!param.bundles.Contains(bundle))
                                 param.bundles.Add(bundle);
                             param.isSubAsset &= isSubAsset;
@@ -429,7 +395,7 @@ namespace UTJ
                                 path = path,
                                 isSubAsset = isSubAsset,
                                 isResident = isResident,
-                                usedType = new List<System.Type>() { type },
+                                usedSubAssetTypes = new List<System.Type>() { type },
                                 bundles = new List<string>() { bundle },
                                 //fileSize = fileSize,
                             };
@@ -447,7 +413,7 @@ namespace UTJ
                             }
                         }
 
-                        // 確認用
+                        // for checking
                         //Debug.Log($"{implicitPath} / Entry : {explicitPath} / Group : {selectedGroup.name}");
                     }
                 }
