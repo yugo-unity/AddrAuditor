@@ -10,13 +10,13 @@
  ***********************************************************************************************************/
 
 using System;
-using System.Reflection;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Build.DataBuilders;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.AddressableAssets.Settings.GroupSchemas;
+using UnityEditor.Build.Pipeline.Utilities;
 using UnityEngine.ResourceManagement.ResourceProviders;
 using UnityEngine;
 using UnityEngine.ResourceManagement.Util;
@@ -31,17 +31,17 @@ namespace UTJ
         const float TWIN_BUTTON_WIDTH = 180f;
         
         [MenuItem("UTJ/ADDR Auditor")]
-        private static void OpenWindow()
+        static void OpenWindow()
         {
             var window = GetWindow<AddrAuditor>();
             window.titleContent = new GUIContent("ADDR Auditor");
-            window.minSize = new Vector2(400f, 650f);
+            window.minSize = new Vector2(400f, 600f);
             window.Show();
         }
 
         public void CreateGUI()
         {
-            // 設定ファイル
+            // find settings file
             var settingsPath = $"Assets/{nameof(AddrAutoGroupingSettings)}.asset";
             var groupingSettings = AssetDatabase.LoadAssetAtPath<AddrAutoGroupingSettings>(settingsPath);
             if (groupingSettings == null)
@@ -67,7 +67,34 @@ namespace UTJ
             
             AddrUtility.CreateSpace(mainElement);
             
-            var button = AddrUtility.CreateButton(mainElement, "Dependencies Graph",
+            BuildButton(mainElement, settings, groupingSettings);
+            
+            AddrUtility.CreateSpace(mainElement);
+            
+            OptionalButtons(mainElement);
+        }
+
+        static void UtilityButtons(VisualElement root, AddressableAssetSettings settings)
+        {
+            // var box = new VisualElement();
+            // box.style.flexDirection = FlexDirection.Row;
+            // box.style.alignSelf = new StyleEnum<Align>(Align.Center);
+
+            var button = AddrUtility.CreateButton(root, "Open and Sort Addressables Groups",
+                "Addressables Group Windowを開きます。\n\n" +
+                "Open Addressables window, just as shortcut.");
+            button.style.width = SINGLE_BUTTON_WIDTH;
+            button.style.alignSelf = new StyleEnum<Align>(Align.Center);
+            button.clicked += () =>
+            {
+                EditorApplication.ExecuteMenuItem("Window/Asset Management/Addressables/Groups");
+                
+                settings.groups.Sort(AddrUtility.CompareGroup);
+                settings.SetDirty(AddressableAssetSettings.ModificationEvent.EntryModified, eventData: null,
+                    postEvent: true, settingsModified: true);
+            };
+            
+            button = AddrUtility.CreateButton(root, "Open Dependencies Graph",
                 "依存関係をグラフ化します。\n\n" +
                 "Display dependencies as node-graph.");
             button.style.width = SINGLE_BUTTON_WIDTH;
@@ -80,7 +107,7 @@ namespace UTJ
                 window.Show();
             };
             
-            button = AddrUtility.CreateButton(mainElement, "Analyze & Suggest any settings",
+            button = AddrUtility.CreateButton(root, "Analyze & Suggest any settings",
                 "プロジェクトを解析して設定の提案を行います。\n\n" +
                 "Analyze Addressables settings and Suggest better one for console.");
             button.style.color = Color.gray;
@@ -88,56 +115,10 @@ namespace UTJ
             button.style.alignSelf = new StyleEnum<Align>(Align.Center);
             button.clicked += () =>
             {
-                throw new ArithmeticException("TODO: new feature");
+                throw new Exception("TODO: new feature");
             };
             
-            AddrUtility.CreateSpace(mainElement);
-            
-            BundleNamingButtons(mainElement, settings);
-            ProviderButtons(mainElement, settings);
-            
-            AddrUtility.CreateSpace(mainElement);
-            
-            BuildButtons(mainElement, settings);
-            
-            AddrUtility.CreateSpace(mainElement);
-            
-            OptionalButtons(mainElement);
-        }
-
-        static void UtilityButtons(VisualElement root, AddressableAssetSettings settings)
-        {
-            var box = new VisualElement
-            {
-                style =
-                {
-                    flexDirection = FlexDirection.Row,
-                    alignSelf = new StyleEnum<Align>(Align.Center)
-                }
-            };
-
-            var button = AddrUtility.CreateButton(box, "Open Groups",
-                "Addressables Group Windowを開きます。\n\n" +
-                "Open Addressables window, just as shortcut.");
-            button.style.minWidth = TWIN_BUTTON_WIDTH;
-            button.clicked += () =>
-            {
-                EditorApplication.ExecuteMenuItem("Window/Asset Management/Addressables/Groups");
-            };
-            
-            button = AddrUtility.CreateButton(box, "Sort Groups",
-                "グループを降順ソートします。\n\n" +
-                "Sort groups by alphanumeric.");
-            button.style.width = TWIN_BUTTON_WIDTH;
-            button.clicked += () =>
-            {
-                // alphanumericソート
-                settings.groups.Sort(AddrUtility.CompareGroup);
-                settings.SetDirty(AddressableAssetSettings.ModificationEvent.EntryModified, eventData: null,
-                    postEvent: true, settingsModified: true);
-            };
-            
-            root.Add(box);
+            //root.Add(box);
         }
 
         static void SelectResidentGroup(VisualElement root, AddressableAssetSettings settings, AddrAutoGroupingSettings groupingSettings)
@@ -173,23 +154,23 @@ namespace UTJ
             box.style.alignSelf = new StyleEnum<Align>(Align.Center);
             box.style.minWidth = 371f;
             
-            var shaderGroupToggle = AddrUtility.CreateToggle(box,
-                "Create Shader Group",
+            var toggle = AddrUtility.CreateToggle(box,
+                "Create Shader Group (optional)",
                 "Shader専用のグループを作ります。\n\n" +
                 "[optional] Create all used shader group.",
                 groupingSettings.shaderGroup);
-            shaderGroupToggle.RegisterValueChangedCallback((evt) =>
+            toggle.RegisterValueChangedCallback((evt) =>
             {
                 groupingSettings.shaderGroup = evt.newValue;
                 EditorUtility.SetDirty(groupingSettings);
             });
             
-            var allowDuplicatedMaterial = AddrUtility.CreateToggle(box,
-                "Allow duplicated materials",
+            toggle = AddrUtility.CreateToggle(box,
+                "Allow Duplicated Materials",
                 "Materialの重複を許容します。過剰なbundleの細分化は避けた方がベターです。\n\n" +
                 "You can ignore duplicated materials. It is better to do if their size are smaller than 32KB.",
                 groupingSettings.allowDuplicatedMaterial);
-            allowDuplicatedMaterial.RegisterValueChangedCallback((evt) =>
+            toggle.RegisterValueChangedCallback((evt) =>
             {
                 groupingSettings.allowDuplicatedMaterial = evt.newValue;
                 EditorUtility.SetDirty(groupingSettings);
@@ -209,7 +190,6 @@ namespace UTJ
             box.style.flexDirection = FlexDirection.Row;
             box.style.alignSelf = new StyleEnum<Align>(Align.Center);
 
-            // Remove Button
             var button = AddrUtility.CreateButton(box, "Remove Shared-Groups",
                 "自動生成されたグループを一括削除します。\n\n" +
                 "Remove all shared groups created automatically.");
@@ -253,145 +233,122 @@ namespace UTJ
             
             root.Add(box);
         }
-        
-        static void BundleNamingButtons(VisualElement root, AddressableAssetSettings settings)
+
+        static void BuildButton(VisualElement root, AddressableAssetSettings settings, AddrAutoGroupingSettings groupingSettings)
         {
-            var box = new VisualElement
-            {
-                style =
-                {
-                    flexDirection = FlexDirection.Row,
-                    alignSelf = new StyleEnum<Align>(Align.Center)
-                }
-            };
+            var box = new VisualElement();
+            box.style.alignSelf = new StyleEnum<Align>(Align.Center);
+            box.style.minWidth = 371f;
 
-            var button = AddrUtility.CreateButton(box, "Bundle Naming\nFilename",
-                "出力されるBundle名をファイル名にします。\n\n" +
-                "Set Bundle Naming Mode to File Name.");
-            button.style.minWidth = TWIN_BUTTON_WIDTH;
-            button.clicked += () =>
+            var toggle = AddrUtility.CreateToggle(box, "Bundle Name is Hash of Filename",
+                "出力されるBundle名をファイル名のHashにします。\n\n" +
+                "Set Bundle Naming Mode to Hash of Filename.", groupingSettings.hashName);
+            toggle.RegisterValueChangedCallback((evt) =>
             {
+                groupingSettings.hashName = evt.newValue;
                 foreach (var group in settings.groups)
                 {
                     var schema = group.GetSchema<BundledAssetGroupSchema>();
-                    schema.BundleNaming = BundledAssetGroupSchema.BundleNamingStyle.NoHash;
+                    schema.BundleNaming = groupingSettings.hashName
+                        ? BundledAssetGroupSchema.BundleNamingStyle.FileNameHash
+                        : BundledAssetGroupSchema.BundleNamingStyle.NoHash;
                 }
-                settings.SetDirty(AddressableAssetSettings.ModificationEvent.EntryModified, eventData: null,
-                    postEvent: true, settingsModified: true);
-                settings.SetDirty(AddressableAssetSettings.ModificationEvent.EntryModified, eventData: null,
-                    postEvent: true, settingsModified: true);
-            };
-            
-            button = AddrUtility.CreateButton(box, "Bundle Naming\nHash of Filename",
-                "出力されるBundle名をハッシュにします。\n\n" +
-                "Set Bundle Naming Mode to File Name Hash.");
-            button.style.width = TWIN_BUTTON_WIDTH;
-            button.clicked += () =>
-            {
-                foreach (var group in settings.groups)
-                {
-                    var schema = group.GetSchema<BundledAssetGroupSchema>();
-                    schema.BundleNaming = BundledAssetGroupSchema.BundleNamingStyle.FileNameHash;
-                }
-                settings.SetDirty(AddressableAssetSettings.ModificationEvent.EntryModified, eventData: null,
-                    postEvent: true, settingsModified: true);
-            };
-            
-            root.Add(box);
-        }
-        
-        static void ProviderButtons(VisualElement root, AddressableAssetSettings settings)
-        {
-            var box = new VisualElement
-            {
-                style =
-                {
-                    flexDirection = FlexDirection.Row,
-                    alignSelf = new StyleEnum<Align>(Align.Center)
-                }
-            };
 
-            var button = AddrUtility.CreateButton(box, "Default Provider",
-                "GroupSchemaに標準のProviderを設定します。\n\n" +
-                "Set default providers to all GroupSchemas.");
-            button.style.minWidth = TWIN_BUTTON_WIDTH;
-            button.clicked += () =>
+                settings.SetDirty(AddressableAssetSettings.ModificationEvent.EntryModified, eventData: null,
+                    postEvent: true, settingsModified: true);
+            });
+            
+            toggle = AddrUtility.CreateToggle(box, "Use Optimized Local Provider",
+                "GroupSchemaにローカル用に最適化したProviderを設定します。\n\n" +
+                "Use optimized providers for local bundles to all GroupSchemas.", groupingSettings.useLocalProvider);
+            toggle.RegisterValueChangedCallback((evt) =>
             {
-                foreach (var group in settings.groups)
+                groupingSettings.useLocalProvider = evt.newValue;
+                // NOTE: all groups are updated if AddressablesAssetSettings is updated
+                if (groupingSettings.useLocalProvider)
                 {
-                    var schema = group.GetSchema<BundledAssetGroupSchema>();
-                    schema.BundledAssetProviderType = new SerializedType() { Value = typeof(BundledAssetProvider) };
-                    schema.AssetBundleProviderType = new SerializedType() { Value = typeof(AssetBundleProvider) };
+                    settings.BundledAssetProviderType = new SerializedType() { Value = typeof(LocalBundledAssetProvider) };
+                    settings.AssetBundleProviderType = new SerializedType() { Value = typeof(LocalAssetBundleProvider) };
+                }
+                else
+                {
+                    settings.BundledAssetProviderType = new SerializedType() { Value = typeof(BundledAssetProvider) };
+                    settings.AssetBundleProviderType = new SerializedType() { Value = typeof(AssetBundleProvider) };
                 }
                 settings.SetDirty(AddressableAssetSettings.ModificationEvent.EntryModified, eventData: null,
                     postEvent: true, settingsModified: true);
-            };
+            });
             
-            button = AddrUtility.CreateButton(box, "Optimized Local Provider",
-                "GroupSchemaにLocal向けのProviderを設定します。\n\n" +
-                "Set local providers to all GroupSchemas.");
-            button.style.width = TWIN_BUTTON_WIDTH;
-            //button.style.backgroundColor = new StyleColor(Color.yellow * 0.5f); // TODO: set yellow if selected  
-            button.clicked += () =>
+            toggle = AddrUtility.CreateToggle(box, "Use Optimized Local Build",
+                "ローカル用に最適化したAddressablesビルドを行います。\n" +
+                "リモートコンテンツを扱う場合、またはEditorでのAssetBundleの挙動を確認する場合は使用しないでください。\n\n" +
+                "Build Addressables with optimization for local bundles.\n" +
+                "Do not use if you have remote contents or verify bundle work on Editor.",
+                groupingSettings.useLocalBuild);
+            toggle.RegisterValueChangedCallback((evt) =>
             {
-                foreach (var group in settings.groups)
-                {
-                    var schema = group.GetSchema<BundledAssetGroupSchema>();
-                    schema.BundledAssetProviderType = new SerializedType() { Value = typeof(LocalBundledAssetProvider) };
-                    schema.AssetBundleProviderType = new SerializedType() { Value = typeof(LocalAssetBundleProvider) };
-                }
-                settings.SetDirty(AddressableAssetSettings.ModificationEvent.EntryModified, eventData: null,
-                    postEvent: true, settingsModified: true);
-            };
+                groupingSettings.useLocalBuild = evt.newValue;
+            });
             
-            root.Add(box);
-        }
-        
-        static void BuildButtons(VisualElement root, AddressableAssetSettings settings)
-        {
-            var box = new VisualElement
+            toggle = AddrUtility.CreateToggle(box, "Clear Build Cache",
+                "Build Cacheを消去します。\n\n" +
+                "Clear all build cache before building Addressables.", groupingSettings.clearBuildCache);
+            toggle.RegisterValueChangedCallback((evt) =>
             {
-                style =
-                {
-                    flexDirection = FlexDirection.Row,
-                    alignSelf = new StyleEnum<Align>(Align.Center)
-                }
-            };
+                groupingSettings.clearBuildCache = evt.newValue;
+            });
 
-            var button = AddrUtility.CreateButton(box, "Default Build",
-                "標準のAddressablesビルドを行います。EditorでのAssetBundleの挙動を確認する場合もこちらを使用してください。\n\n" +
-                "Build Addressables defaults. Please use this if you want to confirm on Editor.");
-            button.style.minWidth = TWIN_BUTTON_WIDTH;
-            button.style.color = Color.green;
+            var button = AddrUtility.CreateButton(box, "Addressables Build",
+                "Addressablesビルドを行います。\n\n" +
+                "Build Addressables defaults. Please use this if you want to confirm on Editor.");            
+            button.style.width = SINGLE_BUTTON_WIDTH;
+            button.style.alignSelf = new StyleEnum<Align>(Align.Center);
             button.clicked += () =>
             {
-                var dataBuilder = settings.DataBuilders.Find(s => s.GetType() == typeof(BuildScriptPackedMode));
-                settings.ActivePlayerDataBuilderIndex = settings.DataBuilders.IndexOf(dataBuilder);
-                AddressableAssetSettings.BuildPlayerContent(out var result);
-            };
-            
-            button = AddrUtility.CreateButton(box, "Optimized Build",
-                "不要なデータを除外したAddressablesビルドを行います。リモートコンテンツとEditorでの動作は考慮されないことに注意してください。\n\n" +
-                "Build Addressables with stripping unused data. Please attention that Remote contents and work on Editor are not supported.");
-            button.style.width = TWIN_BUTTON_WIDTH;
-            button.style.color = Color.green;
-            button.clicked += () =>
-            {
-                // NOTE: StripUnityVersion is internal property, it should be public.
-                var type = typeof(AddressableAssetSettings);
-                var prop = type.GetProperty("StripUnityVersionFromBundleBuild", BindingFlags.NonPublic | BindingFlags.Instance);
-                var stripVersion = prop.GetValue(settings);
-                prop.SetValue(settings, false);
-
-                var dataBuilder = settings.DataBuilders.Find(s => s.GetType() == typeof(OptimizedBuildScriptPackedMode));
+                var buildPackedModeType = typeof(BuildScriptPackedMode);
+                if (groupingSettings.useLocalBuild)
+                    buildPackedModeType = typeof(OptimizedBuildScriptPackedMode);
+                var dataBuilder = settings.DataBuilders.Find(s => s.GetType() == buildPackedModeType);
                 if (dataBuilder == null)
                 {
-                    throw new ArgumentException("TODO: Automatically create SerializedObject as OptimizedBuildScriptPackedMode");
+                    // create builder
+                    var savePath = $"Assets/{nameof(OptimizedBuildScriptPackedMode)}.asset";
+                    dataBuilder = ScriptableObject.CreateInstance<OptimizedBuildScriptPackedMode>();
+                    AssetDatabase.CreateAsset(dataBuilder, savePath);
+                    settings.DataBuilders.Add(dataBuilder);
                 }
                 settings.ActivePlayerDataBuilderIndex = settings.DataBuilders.IndexOf(dataBuilder);
-                AddressableAssetSettings.BuildPlayerContent(out var result);
                 
-                prop.SetValue(settings, stripVersion);
+                // verify settings for Provider
+                if (groupingSettings.useLocalProvider)
+                {
+                    settings.BundledAssetProviderType = new SerializedType() { Value = typeof(LocalBundledAssetProvider) };
+                    settings.AssetBundleProviderType = new SerializedType() { Value = typeof(LocalAssetBundleProvider) };
+                }
+                else
+                {
+                    settings.BundledAssetProviderType = new SerializedType() { Value = typeof(BundledAssetProvider) };
+                    settings.AssetBundleProviderType = new SerializedType() { Value = typeof(AssetBundleProvider) };
+                }
+                foreach (var group in settings.groups)
+                {
+                    var schema = group.GetSchema<BundledAssetGroupSchema>();
+                    schema.BundleNaming = groupingSettings.hashName
+                        ? BundledAssetGroupSchema.BundleNamingStyle.FileNameHash
+                        : BundledAssetGroupSchema.BundleNamingStyle.NoHash;
+                }
+                settings.SetDirty(AddressableAssetSettings.ModificationEvent.EntryModified, eventData: null,
+                    postEvent: true, settingsModified: true);
+                
+                // clear cache
+                if (groupingSettings.clearBuildCache)
+                {
+                    AddressableAssetSettings.CleanPlayerContent(settings.GetDataBuilder(settings.ActivePlayerDataBuilderIndex));
+                    BuildCache.PurgeCache(false);
+                }
+                
+                // build
+                AddressableAssetSettings.BuildPlayerContent(out var result);
             };
             
             root.Add(box);

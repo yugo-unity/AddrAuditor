@@ -14,8 +14,7 @@ using UnityEditor.AddressableAssets.Settings.GroupSchemas;
 
 namespace UTJ
 {
-    [CreateAssetMenu(fileName = "OptimizedBuildScriptPackedMode.asset",
-        menuName = "Addressables/Content Builders/Optimized Build Script")]
+    [CreateAssetMenu(fileName = "OptimizedBuildScriptPackedMode.asset", menuName = "Addressables/Content Builders/Optimized Build Script")]
     public class OptimizedBuildScriptPackedMode : BuildScriptPackedMode
     {
         public override string Name => "Optimized Build Script";
@@ -34,8 +33,10 @@ namespace UTJ
         
         protected override TResult BuildDataImplementation<TResult>(AddressablesDataBuilderInput builderInput)
         {
-            // 毎度フルビルド前提でAssetBundleを更新する前提の場合、TypeTreeを無効化することでbundleデータを削減できる
-            // NOTE: TypeTreeを削除した場合Editorでもロードできなくなるので注意
+            // NOTE: 
+            // we can reduce bundle data if disabled TypeTree with the following restrictions:
+            // - required full build, not content update (no version compatibility) 
+            // - using only for Player, not for Editor
             ContentPipeline.BuildCallbacks.PostScriptsCallbacks = (buildParameters, dependencyData) => {
                 buildParameters.ContentBuildFlags |= ContentBuildFlags.DisableWriteTypeTree;
                 return ReturnCode.Success;

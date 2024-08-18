@@ -20,22 +20,19 @@ namespace UTJ
 {
 	internal partial class AddrAuditor : EditorWindow
 	{
-		// 出力先ディレクトリ
-		private static readonly string makeClassDirectoryPathWithAssets = "Assets/";
+		const string OUTPUT_DIR_PATH = "Assets/";
+		const string OUTPUT_FILE_NAME = "AddressableKeys.cs";
 
-		// ファイル名
-		private static readonly string buildInfomationClassFileName = "AddressableKeys.cs";
-
-		private struct EntryPair
+		struct EntryPair
 		{
 			public string address;
 			public string guid;
 		}
 
 		/// <summary>
-		/// AddressablesのKey定義ファイルを出力する
+		/// create define file about Addressables Keys
 		/// </summary>
-		public static void CreateAddressDefines()
+		static void CreateAddressDefines()
 		{
 			var date = System.DateTime.Now.ToString("yyyy/MM/dd/HH:mm");
 
@@ -157,17 +154,12 @@ namespace UTJ
 				foreach (var e in pair.Value)
 				{
 					var addr = Path.GetFileNameWithoutExtension(e.address);
-
-					// @不可
+					// strip invalid characters
 					addr = addr.Replace("@", "");
-					// スペース不可
 					addr = addr.Replace(" ", "_");
-					// ハイフン不可
 					addr = addr.Replace("-", "_");
-					// ()不可
 					addr = addr.Replace("(", "_");
 					addr = addr.Replace(")", "_");
-					// 数字開始不可
 					if (addr[0] >= '0' && addr[0] <= '9')
 						addr = $"_{addr}";
 
@@ -177,7 +169,7 @@ namespace UTJ
 				code += "}\n";
 			}
 
-			var filePath = makeClassDirectoryPathWithAssets + buildInfomationClassFileName;
+			var filePath = OUTPUT_DIR_PATH + OUTPUT_FILE_NAME;
 			File.WriteAllText(filePath, code, System.Text.Encoding.UTF8);
 			AssetDatabase.Refresh();
 		}

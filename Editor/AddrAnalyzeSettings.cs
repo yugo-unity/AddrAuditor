@@ -2,6 +2,7 @@ using UnityEngine;
 
 public static class AddrAnalyzeSettings
 {
+    // TODO: planned
     public static void Analyzing()
     {
         // 1. Addressables Asset Settings
