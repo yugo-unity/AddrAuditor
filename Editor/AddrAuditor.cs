@@ -258,7 +258,7 @@ namespace UTJ
                     postEvent: true, settingsModified: true);
             });
             
-            toggle = AddrUtility.CreateToggle(box, "Use Optimized Local Provider",
+            toggle = AddrUtility.CreateToggle(box, "Use Optimized Provider (for local bundles)",
                 "GroupSchemaにローカル用に最適化したProviderを設定します。\n\n" +
                 "Use optimized providers for local bundles to all GroupSchemas.", groupingSettings.useLocalProvider);
             toggle.RegisterValueChangedCallback((evt) =>
@@ -279,7 +279,7 @@ namespace UTJ
                     postEvent: true, settingsModified: true);
             });
             
-            toggle = AddrUtility.CreateToggle(box, "Use Optimized Local Build",
+            toggle = AddrUtility.CreateToggle(box, "Use Optimized Build (for local bundles)",
                 "ローカル用に最適化したAddressablesビルドを行います。\n" +
                 "リモートコンテンツを扱う場合、またはEditorでのAssetBundleの挙動を確認する場合は使用しないでください。\n\n" +
                 "Build Addressables with optimization for local bundles.\n" +
