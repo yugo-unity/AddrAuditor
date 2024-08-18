@@ -172,6 +172,7 @@ namespace UTJ
                         this.bundleRule,
                         shaderNodeToggle.value,
                         sharedNodeToggle.value,
+                        residentNoteToggle.value,
                         depthSlider.value,
                         this.ignorePrefixList);
                     this.rootVisualElement.Add(this.graphView);
@@ -202,6 +203,7 @@ namespace UTJ
                         this.bundleRule,
                         shaderNodeToggle.value,
                         sharedNodeToggle.value,
+                        residentNoteToggle.value,
                         depthSlider.value,
                         this.ignorePrefixList);
                     this.rootVisualElement.Add(this.graphView);
@@ -376,21 +378,20 @@ namespace UTJ
             Dictionary<string, BundleNode> bundleNodes = new ();
             List<string> explicitNodes = new ();
 
-            bool enabledShaderNode = false;
-            bool enabledSharedNode = false;
+            bool enabledShaderNode, enabledSharedNode, enabledResidentNode;
             int enabledDepth = 0;
             List<IgnorePrefix> ignoreList = new ();
 
             /// <summary>
             /// Bundleの全依存関係
             /// </summary>
-            public BundlesGraph(TYPE type, AddressableAssetGroup selectedGroup, AddressableAssetEntry selectedEntry,
-                DependenciesRule rule,
-                bool enabledShaderNode, bool enabledSharedNode, int enableDepth, List<IgnorePrefix> ignoreList)
+            public BundlesGraph(TYPE type, AddressableAssetGroup selectedGroup, AddressableAssetEntry selectedEntry, DependenciesRule rule,
+                bool enabledShaderNode, bool enabledSharedNode, bool enabledResidentNode, int enableDepth, List<IgnorePrefix> ignoreList)
             {
                 // options
                 this.enabledShaderNode = enabledShaderNode;
                 this.enabledSharedNode = enabledSharedNode;
+                this.enabledResidentNode = enabledResidentNode;
                 this.enabledDepth = enableDepth;
                 this.ignoreList = ignoreList;
 
@@ -576,8 +577,10 @@ namespace UTJ
                             return null;
                     }
 
-                    // 依存グループ無視
+                    // ignore implicit groups
                     if (!this.enabledSharedNode && title.Contains(AddrAutoGrouping.SHARED_GROUP_NAME))
+                        return null;
+                    if (!this.enabledResidentNode && title.Contains(AddrAutoGrouping.RESIDENT_GROUP_NAME))
                         return null;
                 }
 
