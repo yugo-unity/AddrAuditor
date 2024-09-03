@@ -131,11 +131,14 @@ This will be integrated <b>Analyze & Suggest any settings</b>.
 
 
 ## Planned
+- <t>Support to show dependencies all group</t>
+  - <i>[EN]</i> Currently not supported due to expensive but will be offered as an option to see the whole dependencies
+  - <i>[JA]</i> 高負荷のために除外していたが全体像を確認するためにオプションとして提供予定
 - <t>Analyze & Suggest any settings</t>
-  - <i>[EN]</i><br> The setting various settings as recommended is under consideration
-  - <i>[JA]</i><br> 各種設定を推奨設定する機能を検討中です
+  - <i>[EN]</i> The setting various settings as recommended is under consideration
+  - <i>[JA]</i> 各種設定を推奨設定する機能を検討中
 - <t>Use Short Load Path</t>
-  - <i>[EN]</i><br> if "Load Path" is local by default, namespace is redundant, and the size of the catalog is increased when there are the large number of bundles
+  - <i>[EN]</i> if "Load Path" is local by default, namespace is redundant, and the size of the catalog is increased when there are the large number of bundles
     - you can suppress catalog size by using your own shortened property as a wrapper
-  - <i>[JA]</i><br> Load PathはデフォルトのLocalままだとnamespaceが冗長であり、生成されるバンドル数が多いとカタログサイズを増大させます
-    - 独自の短縮したプロパティをラッパーとすることでカタログサイズを抑制することができます
+  - <i>[JA]</i> Load PathはデフォルトのLocalままだとnamespaceが冗長であり、生成されるバンドル数が多いとカタログサイズを増大させる
+    - 独自の短縮したプロパティをラッパーとすることでカタログサイズを抑制することができる
