@@ -1,3 +1,6 @@
+
+//#define ENABLED_ANIMATION
+
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -81,7 +84,9 @@ namespace UTJ
                     borderBottomRightRadius = new Length(flowSize / 2, LengthUnit.Pixel),
                 },
             };
+#if ENABLED_ANIMATION
             this.schedule.Execute(timer => { this.UpdateFlow(); }).Every(66); // 15fpsで更新
+#endif
             this.capabilities &= ~Capabilities.Deletable; // Edgeの削除を禁止
             this.edgeControl.RegisterCallback<GeometryChangedEvent>(OnEdgeControlGeometryChanged);
 

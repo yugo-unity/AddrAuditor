@@ -19,6 +19,7 @@ namespace UTJ
     /// </summary>
     public static class AddrAutoGrouping
     {
+        public static readonly string SETTINGS_PATH = $"Assets/{nameof(AddrAutoGroupingSettings)}.asset";
         public const string SHARED_GROUP_NAME = "+Shared_";
         public const string SHADER_GROUP_NAME = "+Shared_Shader";
         public const string SINGLE_GROUP_NAME = "+Shared_Single";

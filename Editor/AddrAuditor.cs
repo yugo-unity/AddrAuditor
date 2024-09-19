@@ -24,7 +24,7 @@ using UnityEngine.UIElements;
 
 namespace UTJ
 {
-    internal partial class AddrAuditor
+    internal partial class AddrAuditor : EditorWindow
     {
         const int RECURSIVE_COUNT = 10;
         const float SINGLE_BUTTON_WIDTH = 366f;

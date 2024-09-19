@@ -18,7 +18,7 @@ using System.Collections.Generic;
 /// </summary>
 namespace UTJ
 {
-	internal partial class AddrAuditor : EditorWindow
+	internal partial class AddrAuditor
 	{
 		const string OUTPUT_DIR_PATH = "Assets/";
 		const string OUTPUT_FILE_NAME = "AddressableKeys.cs";
