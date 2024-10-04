@@ -78,13 +78,10 @@ namespace AddrAuditor.Editor
         public override void BuildContextualMenu(ContextualMenuPopulateEvent evt)
         {
             //base.BuildContextualMenu(evt); // no need "Disconnect All"
-            evt.menu.AppendAction("Focus the dependencies on this bundle", FocusNode);
+            evt.menu.AppendAction("Focus the dependencies on this bundle", FocusSimpleNode);
+            evt.menu.AppendAction("Focus the dependencies on this bundle with contained entries", FocusEntriesNode);
         }
-        // カスタムアクション1の処理
-        private void FocusNode(DropdownMenuAction action)
-        {
-            // TODO: support to ASSET_DEPENDENCE
-            graph.UpdateBundleDependencies(this.bundleName, BundlesGraph.TYPE.BUNDLE_DEPENDENCE);
-        }
+        void FocusSimpleNode(DropdownMenuAction action) => graph.UpdateBundleDependencies(this.bundleName, BundlesGraph.TYPE.BUNDLE_DEPENDENCE);
+        void FocusEntriesNode(DropdownMenuAction action) => graph.UpdateBundleDependencies(this.bundleName, BundlesGraph.TYPE.ASSET_DEPENDENCE);
     }
 }
