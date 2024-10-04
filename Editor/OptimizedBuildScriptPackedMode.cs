@@ -12,7 +12,7 @@ using System.Text;
 using System.Collections.Generic;
 using UnityEditor.AddressableAssets.Settings.GroupSchemas;
 
-namespace UTJ
+namespace AddrAuditor.Editor
 {
     [CreateAssetMenu(fileName = "OptimizedBuildScriptPackedMode.asset", menuName = "Addressables/Content Builders/Optimized Build Script")]
     public class OptimizedBuildScriptPackedMode : BuildScriptPackedMode

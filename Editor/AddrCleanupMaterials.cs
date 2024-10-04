@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace UTJ
+namespace AddrAuditor.Editor
 {
     internal partial class AddrAuditor
     {

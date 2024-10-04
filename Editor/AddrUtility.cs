@@ -12,13 +12,17 @@ using UnityEditor.AddressableAssets.Settings.GroupSchemas;
 using UnityEditor.AddressableAssets.Build.DataBuilders;
 using UnityEditor.AddressableAssets.Build.BuildPipelineTasks;
 
-namespace UTJ
+namespace AddrAuditor.Editor
 {
     /// <summary>
     /// Utiliities API
     /// </summary>
     public static class AddrUtility
     {
+        public const string UNITY_BUILTIN_SHADERS = "unitybuiltinshaders";
+        // SBPのCommonSettings.csから
+        public static readonly GUID UNITY_BUILTIN_SHADERS_GUID = new ("0000000000000000e000000000000000");
+        
         #region UI HELPER
         const float HELPBOX_HEIGHT = 50f;
         const float BUTTON_HEIGHT = 50f;
@@ -275,6 +279,30 @@ namespace UTJ
             // 桁数の違う数字を揃える
             var regA = NUM_REGEX.Replace(a.name, "");
             var regB = NUM_REGEX.Replace(b.name, "");
+            if ((regA.Length > 0 && regB.Length > 0) && regA.Length != regB.Length)
+            {
+                if (ret > 0 && regA.Length < regB.Length)
+                    return -1;
+                else if (ret < 0 && regA.Length > regB.Length)
+                    return 1;
+            }
+
+            return ret;
+        }
+        /// <summary>
+        /// Addressables Groupのalphanumericソート
+        /// </summary>
+        public static int CompareGroup(string a, string b)
+        {
+            if (a.Contains(UNITY_BUILTIN_SHADERS))
+                return -1;
+            if (b.Contains(UNITY_BUILTIN_SHADERS))
+                return 1;
+
+            var ret = string.CompareOrdinal(a, b);
+            // 桁数の違う数字を揃える
+            var regA = NUM_REGEX.Replace(a, string.Empty);
+            var regB = NUM_REGEX.Replace(b, string.Empty);
             if ((regA.Length > 0 && regB.Length > 0) && regA.Length != regB.Length)
             {
                 if (ret > 0 && regA.Length < regB.Length)

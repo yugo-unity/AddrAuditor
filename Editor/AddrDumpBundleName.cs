@@ -5,7 +5,7 @@ using UnityEditor.AddressableAssets.Build.BuildPipelineTasks;
 using UnityEditor.Build.Pipeline;
 using UnityEngine;
 
-namespace UTJ
+namespace AddrAuditor.Editor
 {
     internal partial class AddrAuditor
     {

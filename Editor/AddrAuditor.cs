@@ -22,7 +22,7 @@ using UnityEngine;
 using UnityEngine.ResourceManagement.Util;
 using UnityEngine.UIElements;
 
-namespace UTJ
+namespace AddrAuditor.Editor
 {
     internal partial class AddrAuditor : EditorWindow
     {

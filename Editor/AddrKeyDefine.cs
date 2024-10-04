@@ -16,7 +16,7 @@ using System.Collections.Generic;
 /// リモートアセットについてはKey値をハードコーディングするのは良くない
 /// よって本スクリプトはローカルのみを考慮し、型とアドレスが共に同一のエントリがある場合はコンパイルエラーとなる、で正しい
 /// </summary>
-namespace UTJ
+namespace AddrAuditor.Editor
 {
 	internal partial class AddrAuditor
 	{

@@ -5,7 +5,7 @@ using UnityEngine.ResourceManagement.Exceptions;
 using UnityEngine.ResourceManagement.ResourceLocations;
 using UnityEngine.ResourceManagement.ResourceProviders;
 
-namespace UTJ
+namespace AddrAuditor
 {
     /// <summary>
     /// Provides methods for loading an AssetBundle from a local or remote location.

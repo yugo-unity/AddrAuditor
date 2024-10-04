@@ -6,7 +6,7 @@ using UnityEngine.ResourceManagement.ResourceProviders;
 
 using Object = UnityEngine.Object;
 
-namespace UTJ
+namespace AddrAuditor
 {
     /// <summary>
     /// Provides assets stored in an asset bundle.

@@ -7,7 +7,7 @@ using UnityEngine.UIElements;
 using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 
-namespace UTJ
+namespace AddrAuditor.Editor
 {
     /// <summary>
     /// display line flow

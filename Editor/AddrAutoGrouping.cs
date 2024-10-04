@@ -11,7 +11,7 @@ using UnityEditor.Build.Pipeline.Interfaces;
 using UnityEngine;
 using UnityEngine.U2D;
 
-namespace UTJ
+namespace AddrAuditor.Editor
 {
     /// <summary>
     /// Addressablesの最適な重複解決の自動グルーピング

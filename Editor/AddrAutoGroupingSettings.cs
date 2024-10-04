@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace UTJ
+namespace AddrAuditor.Editor
 {
     /// <summary>
     /// saved settings for AddrAutoGrouping
