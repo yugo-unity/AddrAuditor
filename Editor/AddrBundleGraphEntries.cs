@@ -225,75 +225,79 @@ namespace AddrAuditor.Editor
             var context = rule.context;
             var depth = 0;
 
-            if (context.assetGroupToBundles.TryGetValue(this.graphSetting.selectedGroup, out var bundleNames))
+            var bundleNames = new List<string>(20000);
+            foreach (var group in this.graphSetting.selectedGroups)
             {
-                foreach (var bundleName in bundleNames)
+                if (context.assetGroupToBundles.TryGetValue(group, out var names))
+                    bundleNames.AddRange(names);
+            }
+            
+            foreach (var bundleName in bundleNames)
+            {
+                if (bundleName.Contains(AddrUtility.UNITY_BUILTIN_SHADERS))
+                    continue;
+                
+                // ありえないはずだが重複チェック
+                if (this.bundleNodes.ContainsKey(bundleName))
                 {
-                    if (bundleName.Contains(AddrUtility.UNITY_BUILTIN_SHADERS))
-                        continue;
-                    
-                    // ありえないはずだが重複チェック
-                    if (this.bundleNodes.ContainsKey(bundleName))
-                    {
-                        Debug.LogWarning($"Exist the same bundleName for Nodes : {bundleName}");
-                        continue;
-                    }
+                    Debug.LogWarning($"Exist the same bundleName for Nodes : {bundleName}");
+                    continue;
+                }
 
-                    // 指定エントリ名でフィルタリング for Pack Separately
-                    if (this.graphSetting.selectedEntry != null)
+                // 指定エントリ名でフィルタリング for Pack Separately
+                if (this.graphSetting.selectedEntry != null)
+                {
+                    var hit = false;
+                    var bundleInfo = rule.allBundleInputDefs.Find(val => val.assetBundleName == bundleName);
+                    foreach (var assetName in bundleInfo.assetNames)
                     {
-                        var hit = false;
-                        var bundleInfo = rule.allBundleInputDefs.Find(val => val.assetBundleName == bundleName);
-                        foreach (var assetName in bundleInfo.assetNames)
+                        if (assetName == this.graphSetting.selectedEntry.AssetPath)
                         {
-                            if (assetName == this.graphSetting.selectedEntry.AssetPath)
-                            {
-                                hit = true;
-                                break;
-                            }
+                            hit = true;
+                            break;
                         }
-
-                        if (!hit)
-                            continue;
                     }
 
-                    // explicitノード作成
-                    if (!CreateBundleNode(rule.context, bundleName, isExplicit: true, this.graphSetting, out var node))
+                    if (!hit)
                         continue;
-                    this.explicitNodes.Add(bundleName);
-                    this.bundleNodes.Add(bundleName, node);
-                    this.AddElement(node);
+                }
 
-                    // 内容物表示
-                    CreateOutputPortsWithAssets(rule, node, this.graphSetting.selectedEntry);
+                // explicitノード作成
+                if (!CreateBundleNode(rule.context, bundleName, isExplicit: true, this.graphSetting, out var node))
+                    continue;
+                this.explicitNodes.Add(bundleName);
+                this.bundleNodes.Add(bundleName, node);
+                this.AddElement(node);
 
-                    // implicitノード作成
-                    //var totalDepth = 0;
-                    if (context.bundleToImmediateBundleDependencies.TryGetValue(bundleName, out var depBundleNames))
+                // 内容物表示
+                CreateOutputPortsWithAssets(rule, node, this.graphSetting.selectedEntry);
+
+                // implicitノード作成
+                //var totalDepth = 0;
+                if (context.bundleToImmediateBundleDependencies.TryGetValue(bundleName, out var depBundleNames))
+                {
+                    if (depBundleNames.Count > 1)
                     {
-                        if (depBundleNames.Count > 1)
+                        // 再帰的に辿る
+                        foreach (var depBundleName in depBundleNames)
                         {
-                            // 再帰的に辿る
-                            foreach (var depBundleName in depBundleNames)
-                            {
-                                // 自分も含まれるのでスキップ
-                                if (bundleName == depBundleName)
-                                    continue;
-                                
-                                this.AddEntriesNode(rule, node, depBundleName, depth);
-                                //var depCount = this.AddEntriesNode(rule, node, depBundleName, depth);
-                                //totalDepth += depCount;
-                            }
+                            // 自分も含まれるのでスキップ
+                            if (bundleName == depBundleName)
+                                continue;
+                            
+                            this.AddEntriesNode(rule, node, depBundleName, depth);
+                            //var depCount = this.AddEntriesNode(rule, node, depBundleName, depth);
+                            //totalDepth += depCount;
                         }
                     }
                 }
+            }
 
-                // 不要なPortを取り除く
-                foreach (var node in this.bundleNodes.Values)
-                {
-                    node.RefreshPorts();
-                    node.RefreshExpandedState();
-                }
+            // 不要なPortを取り除く
+            foreach (var node in this.bundleNodes.Values)
+            {
+                node.RefreshPorts();
+                node.RefreshExpandedState();
             }
         }
     }

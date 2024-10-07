@@ -72,7 +72,7 @@ namespace AddrAuditor.Editor
     {
         public string residentGroupGuid;
         public AddrDependenciesGraph rootGraph;
-        public AddressableAssetGroup selectedGroup;
+        public List<AddressableAssetGroup> selectedGroups;
         public AddressableAssetEntry selectedEntry;
         public bool enabledResidentNode;
         public bool enabledShaderNode;
@@ -86,21 +86,20 @@ namespace AddrAuditor.Editor
     /// </summary>
     internal class AddrDependenciesGraph : EditorWindow
     {
-        private GraphView graphView = null;
-        private DependenciesRule bundleRule = new ();
-        private AddrAutoGroupingSettings groupingSettings;
-        private GraphSetting graphSetting;
-        private Box mainBox;
+        GraphView graphView = null;
+        DependenciesRule bundleRule = new ();
+        AddrAutoGroupingSettings groupingSettings;
+        Box mainBox;
 
         [SerializeField] private List<IgnorePrefix> ignorePrefixList = new ();
 
-        internal void UpdateBundleDependencies(string bundleName, BundlesGraph.TYPE graphType)
+        internal void UpdateBundleDependencies(BundlesGraph.TYPE graphType, GraphSetting graphSetting, string focusBundleName)
         {
             if (this.mainBox is not null)
                 this.rootVisualElement.Remove(this.mainBox);
             if (this.graphView is not null)
                 this.rootVisualElement.Remove(this.graphView);
-            this.graphView = new BundlesGraph(graphType, this.graphSetting, this.bundleRule, bundleName);
+            this.graphView = new BundlesGraph(graphType, graphSetting, this.bundleRule, focusBundleName);
             this.rootVisualElement.Add(this.graphView);
             this.rootVisualElement.Add(this.mainBox);
         }
@@ -117,7 +116,7 @@ namespace AddrAuditor.Editor
             AddrUtility.CreateSpace(this.mainBox);
 
             // Select Group
-            var groupList = settings.groups.FindAll(group =>
+            var activeGroups = settings.groups.FindAll(group =>
             {
                 var schema = group.GetSchema<BundledAssetGroupSchema>();
                 if (schema != null && schema.IncludeInBuild)
@@ -125,16 +124,19 @@ namespace AddrAuditor.Editor
                             schema.IncludeLabelsInCatalog);
                 return false;
             });
-            var selectedGroupField = new PopupField<AddressableAssetGroup>("Selected Group", groupList, 0,
-                value => value.name,
-                value => value.name);
+            var displayedGroups = new List<AddressableAssetGroup>(activeGroups);
+            displayedGroups.Insert(0, null);
+            var selectedGroupField = new PopupField<AddressableAssetGroup>("Selected Group", displayedGroups, 0,
+                value => value != null ? value.name : "all",
+                value => value != null ? value.name : "all");
             selectedGroupField.name = "SelectedGroup";
             selectedGroupField.tooltip = "表示するグループ\n\n The group what you want to analyze.";
             this.mainBox.Add(selectedGroupField);
 
             // Select Entry
             var entryList = new List<AddressableAssetEntry>() { null };
-            entryList.AddRange(selectedGroupField.value.entries);
+            if (selectedGroupField.value != null)
+                entryList.AddRange(selectedGroupField.value.entries);
             var selectedEntryField = new PopupField<AddressableAssetEntry>("Selected Entry", entryList, 0,
                 value => value == null ? "all" : value.address,
                 value => value == null ? "all" : value.address);
@@ -184,8 +186,11 @@ namespace AddrAuditor.Editor
             {
                 entryList.Clear();
                 entryList.Add(null);
-                foreach (var entry in ev.newValue.entries)
-                    entryList.Add(entry);
+                if (ev.newValue != null)
+                {
+                    foreach (var entry in ev.newValue.entries)
+                        entryList.Add(entry);
+                }
                 selectedEntryField.index = 0;
             });
 
@@ -223,11 +228,10 @@ namespace AddrAuditor.Editor
                     this.bundleRule.Execute();
 
                     var selectedEntry = selectedEntryField.index > 0 ? selectedEntryField.value : null;
-                    this.graphSetting = new GraphSetting()
+                    var graphSetting = new GraphSetting()
                     {
                         rootGraph = this,
                         residentGroupGuid = this.groupingSettings.residentGroupGUID,
-                        selectedGroup = selectedGroupField.value,
                         selectedEntry = selectedEntry,
                         enabledShaderNode = shaderNodeToggle.value,
                         enabledSharedNode = sharedNodeToggle.value,
@@ -235,7 +239,11 @@ namespace AddrAuditor.Editor
                         enabledDepth = depthSlider.value,
                         ignoreList = new List<IgnorePrefix>(this.ignorePrefixList),
                     };
-                    this.UpdateBundleDependencies("", BundlesGraph.TYPE.BUNDLE_DEPENDENCE);
+                    if (selectedGroupField.value != null)
+                        graphSetting.selectedGroups = new List<AddressableAssetGroup> { selectedGroupField.value };
+                    else
+                        graphSetting.selectedGroups = new List<AddressableAssetGroup>(activeGroups);
+                    this.UpdateBundleDependencies(BundlesGraph.TYPE.BUNDLE_DEPENDENCE, graphSetting, "");
                 };
             }
 
@@ -253,10 +261,9 @@ namespace AddrAuditor.Editor
                     this.bundleRule.Execute();
 
                     var selectedEntry = selectedEntryField.index > 0 ? selectedEntryField.value : null;
-                    this.graphSetting = new GraphSetting()
+                    var graphSetting = new GraphSetting()
                     {
                         rootGraph = this,
-                        selectedGroup = selectedGroupField.value,
                         selectedEntry = selectedEntry,
                         enabledShaderNode = shaderNodeToggle.value,
                         enabledSharedNode = sharedNodeToggle.value,
@@ -264,7 +271,11 @@ namespace AddrAuditor.Editor
                         enabledDepth = depthSlider.value,
                         ignoreList = new List<IgnorePrefix>(this.ignorePrefixList),
                     };
-                    this.UpdateBundleDependencies("", BundlesGraph.TYPE.ASSET_DEPENDENCE);
+                    if (selectedGroupField.value != null)
+                        graphSetting.selectedGroups = new List<AddressableAssetGroup> { selectedGroupField.value };
+                    else
+                        graphSetting.selectedGroups = new List<AddressableAssetGroup>(activeGroups);
+                    this.UpdateBundleDependencies(BundlesGraph.TYPE.ASSET_DEPENDENCE, graphSetting, "");
                 };
             }
 

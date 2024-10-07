@@ -10,6 +10,7 @@
 ***********************************************************************************************************/
 
 using System.Collections.Generic;
+using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 
@@ -117,60 +118,64 @@ namespace AddrAuditor.Editor
             var context = rule.context;
             var depth = 0;
 
-            if (context.assetGroupToBundles.TryGetValue(this.graphSetting.selectedGroup, out var bundleNames))
+            var bundleNames = new List<string>(20000);
+            foreach (var group in this.graphSetting.selectedGroups)
             {
-                foreach (var bundleName in bundleNames)
+                if (context.assetGroupToBundles.TryGetValue(group, out var names))
+                    bundleNames.AddRange(names);
+            }
+
+            foreach (var bundleName in bundleNames)
+            {
+                if (bundleName.Contains(AddrUtility.UNITY_BUILTIN_SHADERS))
+                    continue;
+                
+                // ありえないはずだが重複チェック
+                if (this.bundleNodes.ContainsKey(bundleName))
                 {
-                    if (bundleName.Contains(AddrUtility.UNITY_BUILTIN_SHADERS))
-                        continue;
-                    
-                    // ありえないはずだが重複チェック
-                    if (this.bundleNodes.ContainsKey(bundleName))
-                    {
-                        Debug.LogWarning($"Exist the same bundleName for Nodes : {bundleName}");
-                        continue;
-                    }
+                    Debug.LogWarning($"Exist the same bundleName for Nodes : {bundleName}");
+                    continue;
+                }
 
-                    // 指定エントリ名でフィルタリング
-                    if (this.graphSetting.selectedEntry != null)
+                // 指定エントリ名でフィルタリング
+                if (this.graphSetting.selectedEntry != null)
+                {
+                    var hit = false;
+                    var bundleInfo = rule.allBundleInputDefs.Find(val => val.assetBundleName == bundleName);
+                    foreach (var assetName in bundleInfo.assetNames)
                     {
-                        var hit = false;
-                        var bundleInfo = rule.allBundleInputDefs.Find(val => val.assetBundleName == bundleName);
-                        foreach (var assetName in bundleInfo.assetNames)
+                        if (assetName == this.graphSetting.selectedEntry.AssetPath)
                         {
-                            if (assetName == this.graphSetting.selectedEntry.AssetPath)
-                            {
-                                hit = true;
-                                break;
-                            }
+                            hit = true;
+                            break;
                         }
-
-                        if (!hit)
-                            continue;
                     }
 
-                    if (!CreateBundleNode(context, bundleName, isExplicit: true, this.graphSetting, out var node))
-                            continue;
-                    this.explicitNodes.Add(bundleName);
-                    this.bundleNodes.Add(bundleName, node);
-                    this.AddElement(node);
+                    if (!hit)
+                        continue;
+                }
 
-                    // implicitノード作成
-                    if (context.bundleToImmediateBundleDependencies.TryGetValue(bundleName, out var depBundleNames))
+                if (!CreateBundleNode(context, bundleName, isExplicit: true, this.graphSetting, out var node))
+                        continue;
+                this.explicitNodes.Add(bundleName);
+                this.bundleNodes.Add(bundleName, node);
+                this.AddElement(node);
+
+                // implicitノード作成
+                if (context.bundleToImmediateBundleDependencies.TryGetValue(bundleName, out var depBundleNames))
+                {
+                    if (depBundleNames.Count > 1)
                     {
-                        if (depBundleNames.Count > 1)
+                        CreateOutputPort(node);
+
+                        // 再帰的に辿る
+                        foreach (var depBundleName in depBundleNames)
                         {
-                            CreateOutputPort(node);
+                            // 自分も含まれるのでスキップ
+                            if (bundleName == depBundleName)
+                                continue;
 
-                            // 再帰的に辿る
-                            foreach (var depBundleName in depBundleNames)
-                            {
-                                // 自分も含まれるのでスキップ
-                                if (bundleName == depBundleName)
-                                    continue;
-
-                                this.AddBundleNode(rule, node, depBundleName, depth);
-                            }
+                            this.AddBundleNode(rule, node, depBundleName, depth);
                         }
                     }
                 }

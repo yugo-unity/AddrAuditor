@@ -10,7 +10,6 @@
 ***********************************************************************************************************/
 
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 using UnityEditor.AddressableAssets.Build.DataBuilders;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
@@ -345,7 +344,7 @@ namespace AddrAuditor.Editor
                     return false;
             }
 
-            node = new BundleNode(graphSetting.rootGraph);
+            node = new BundleNode(graphSetting);
             node.title = title;
             node.name = node.bundleName = bundleName;
             //if (isBuiltIn)
