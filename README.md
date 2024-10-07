@@ -17,11 +17,14 @@ StandaloneやConsole Game向けにAddressablesを扱う際の包括的な拡張�
 ## 1. Dependencies Graph
 <i>[EN]</i><br>
 It is possible to find unintended references by visualizing the dependencies between bundles/assets in Addressables.<br>
+By right-clicking on a node, you can display only the dependencies of the specified bundle.</br>
 <i>[JA]</i><br>
-Addressablesのバンドル間の依存関係を可視化することで意図しない参照を見つけることが可能です。
+Addressablesのバンドル間の依存関係を可視化することで意図しない参照を見つけることが可能です。</br>
+ノードを右クリックすることで指定のbundleの依存関係のみ表示できます。</br>
 
 ![image](https://github.com/user-attachments/assets/146ce754-c07e-4d70-a98d-a44add828a67)</br>
-![image](https://github.com/user-attachments/assets/af42faaf-7739-49e1-8fdd-f9e6605f6001)
+![image](https://github.com/user-attachments/assets/af42faaf-7739-49e1-8fdd-f9e6605f6001)</br>
+![image](https://github.com/user-attachments/assets/9da84aa4-9b80-4928-ab59-cd0c805caa90)</br>
 
 ## 2. Analyze & Suggest any settings (not implemented)
 <i>[EN]</i><br>
@@ -131,9 +134,6 @@ This will be integrated <b>Analyze & Suggest any settings</b>.
 
 
 ## Planned
-- <t>Support to show dependencies all group</t>
-  - <i>[EN]</i> Currently not supported due to expensive but will be offered as an option to see the whole dependencies
-  - <i>[JA]</i> 高負荷のために除外していたが全体像を確認するためにオプションとして提供予定
 - <t>Analyze & Suggest any settings</t>
   - <i>[EN]</i> The setting various settings as recommended is under consideration
   - <i>[JA]</i> 各種設定を推奨設定する機能を検討中
