@@ -41,49 +41,65 @@ namespace AddrAuditor.Editor
         static bool IsBuiltInShaderNode(BundleNode node) => node.bundleName.Contains(AddrUtility.UNITY_BUILTIN_SHADERS);
         static int CompareGroup(VisualElement a, VisualElement b) => AddrUtility.CompareGroup(a.name, b.name);
 
-        // TODO: リファクタ
-        /// <summary>
-        /// 指定ノード
-        /// </summary>
-        /// <param name="self"></param>
-        /// <param name="bundleName"></param>
-        /// <param name="focusBundleName"></param>
-        /// <param name="parentStack"></param>
-        /// <param name="enabledNodes"></param>
-        /// <param name="context"></param>
-        void CheckNodeName(bool self, string bundleName, string focusBundleName, Stack<string> parentStack, HashSet<string> enabledNodes, AddressableAssetsBuildContext context)
+        HashSet<string> CollectAvailableBundleNames(string focusBundleName, AddressableAssetsBuildContext context)
         {
+            var parentStack = new Stack<string>(this.bundleNodes.Count);
+            var availableNames = new HashSet<string>(this.bundleNodes.Count);
+            
+            // 子供の登録
+            CheckAvailableBundle(true, focusBundleName, focusBundleName, context, parentStack, availableNames);
+            // 明示的なbundleから辿る
+            foreach (var bundleName in this.explicitNodes)
+            {
+                parentStack.Clear();
+                CheckAvailableBundle(false, bundleName, focusBundleName, context, parentStack, availableNames);
+            }
+
+            return availableNames;
+        }
+
+        /// <summary>
+        /// 指定bundle名と依存関係があるbundle名なのか再帰的に判定する
+        /// </summary>
+        /// <param name="self">指定bundle自身の判定か？truneなら子は全て登録</param>
+        /// <param name="bundleName">判定するbundle名</param>
+        /// <param name="focusBundleName">指定されたbundle名</param>
+        /// <param name="context">解析データ</param>
+        /// <param name="parentStack">検出中の親bundle</param>
+        /// <param name="availableNames">依存関係が認められたbundle名</param>
+        void CheckAvailableBundle(bool self, string bundleName, string focusBundleName, AddressableAssetsBuildContext context,
+            Stack<string> parentStack, HashSet<string> availableNames)
+        {
+            // 指定bundleにたどり着いたらそれまでのbundleを登録
             if (!self && bundleName == focusBundleName)
             {
                 foreach (var stack in parentStack)
-                    enabledNodes.Add(stack);
+                    availableNames.Add(stack);
                 return;
             }
-            
+
             if (!self)
                 parentStack.Push(bundleName);
             else
-                enabledNodes.Add(bundleName);
-            if (this.bundleNodes.TryGetValue(bundleName, out var node))
+                availableNames.Add(bundleName);
+            if (context.bundleToImmediateBundleDependencies.TryGetValue(bundleName, out var depBundleNames))
             {
-                if (context.bundleToImmediateBundleDependencies.TryGetValue(bundleName, out var depBundleNames))
+                foreach (var depBundleName in depBundleNames)
                 {
-                    foreach (var depBundleName in depBundleNames)
-                    {
-                        // 自身は無視
-                        if (depBundleName == bundleName)
-                            continue;
-                        // 循環参照
-                        if (parentStack.Contains(depBundleName))
-                            continue;
-                        CheckNodeName(self, depBundleName, focusBundleName, parentStack, enabledNodes, context);
-                    }
+                    // 自身は無視
+                    if (depBundleName == bundleName)
+                        continue;
+                    // 循環参照
+                    if (parentStack.Contains(depBundleName))
+                        continue;
+                    CheckAvailableBundle(self, depBundleName, focusBundleName, context, parentStack, availableNames);
                 }
-                if (!self)
-                    parentStack.Pop();
             }
+
+            if (!self)
+                parentStack.Pop();
         }
-        
+
         /// <summary>
         /// Bundleの全依存関係
         /// </summary>
@@ -104,24 +120,17 @@ namespace AddrAuditor.Editor
             // NOTE: レイアウトが一旦完了しないとノードサイズがとれないのでViewの描画前コールバックに仕込む
             this.RegisterCallback<GeometryChangedEvent>((ev) =>
             {
-                var parentStack = new Stack<string>(); // 親ノード
-                var enabledNodes = new HashSet<string>();
+                HashSet<string> availableNames = null;
                 if (!string.IsNullOrEmpty(focusBundleName))
                 {
-                    enabledNodes.Add(focusBundleName);
-                    CheckNodeName(true, focusBundleName, focusBundleName, parentStack, enabledNodes, rule.context);
-                    
-                    foreach (var bundleName in this.explicitNodes)
-                    {
-                        parentStack.Clear();
-                        CheckNodeName(false, bundleName, focusBundleName, parentStack, enabledNodes, rule.context);
-                    }
+                    // 指定bundle名と依存関係のあるbundle名を検出
+                    availableNames = this.CollectAvailableBundleNames(focusBundleName, rule.context);
 
-                    // 削除
+                    // 指定bundleと依存関係を持たないBundleNodeを削除
                     var deleteKeys = new List<string>(this.bundleNodes.Keys.Count);
                     foreach (var node in this.bundleNodes)
                     {
-                        if (enabledNodes.Contains(node.Key))
+                        if (availableNames.Contains(node.Key))
                             continue;
 
                         foreach (var nodeEdges in node.Value.edgeFrom.Values)
@@ -129,7 +138,6 @@ namespace AddrAuditor.Editor
                             foreach (var edge in nodeEdges)
                                 this.RemoveElement(edge);
                         }
-
                         foreach (var nodeEdges in node.Value.edgeTo.Values)
                         {
                             foreach (var edge in nodeEdges)
@@ -143,17 +151,11 @@ namespace AddrAuditor.Editor
                         this.bundleNodes.Remove(key);
                 }
 
-                // TODO: メンバ変数とローカル変数の定義がぐちゃぐちゃなので整理すべき
-                parentStack.Clear();
                 var position = new Vector2(400f, 50f);
-                var placedNodes = new HashSet<string>(); // 整列済みノード
-                var depth = 0;
+                var parentStack = new Stack<string>(this.bundleNodes.Count); // 親ノード
+                var placedNodes = new HashSet<string>(this.bundleNodes.Count); // 整列済みノード
                 foreach (var bundleName in this.explicitNodes)
-                {
-                    if (!string.IsNullOrEmpty(focusBundleName) && !enabledNodes.Contains(bundleName))
-                        continue;
-                    this.AlignNode(rule.context, bundleName, parentStack, placedNodes, depth, ref position);
-                }
+                    this.AlignNode(rule.context, bundleName, parentStack, placedNodes, currentDepth:0, ref position);
             });
 
             this.StretchToParentSize(); // 親のサイズに合わせてGraphViewのサイズを設定

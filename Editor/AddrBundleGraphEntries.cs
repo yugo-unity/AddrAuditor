@@ -26,7 +26,10 @@ namespace AddrAuditor.Editor
         /// <summary>
         /// 内容物をOutputポートに登録
         /// </summary>
-        static void CreateOutputPortsWithAssets(DependenciesRule rule, BundleNode node, AddressableAssetEntry selectedEntry)
+        /// <param name="rule">解析データ</param>
+        /// <param name="node">指定ノード</param>
+        /// <param name="selectedEntries">指定エントリフィルタ</param>
+        static void CreateOutputPortsWithAssets(DependenciesRule rule, BundleNode node, List<AddressableAssetEntry> selectedEntries)
         {
             if (node.bundleName.Contains(AddrUtility.UNITY_BUILTIN_SHADERS))
             {
@@ -40,7 +43,20 @@ namespace AddrAuditor.Editor
             foreach (var assetName in info.assetNames)
             {
                 // 指定エントリ名でフィルタリング for Pack Together
-                if (selectedEntry != null && selectedEntry.AssetPath != assetName)
+                var hit = true;
+                if (selectedEntries != null)
+                {
+                    hit = false;
+                    foreach (var entry in selectedEntries)
+                    {
+                        if (entry.AssetPath == assetName)
+                        {
+                            hit = true;
+                            break;
+                        }
+                    }
+                }
+                if (!hit)
                     continue;
 
                 var output = Port.Create<FlowingEdge>(Orientation.Horizontal, Direction.Output, Port.Capacity.Multi, typeof(float));
@@ -55,6 +71,14 @@ namespace AddrAuditor.Editor
             node.outputContainer.Sort(CompareGroup);
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="rule">解析データ</param>
+        /// <param name="parentNode"></param>
+        /// <param name="bundleName"></param>
+        /// <param name="depth"></param>
+        /// <returns></returns>
         int AddEntriesNode(DependenciesRule rule, BundleNode parentNode, string bundleName, int depth)
         {
             var onlyConnect = false;
@@ -73,7 +97,7 @@ namespace AddrAuditor.Editor
 
                 // 内容物表示
                 // NOTE: 依存ノードのエントリフィルタは不要
-                CreateOutputPortsWithAssets(rule, node, selectedEntry: null);
+                CreateOutputPortsWithAssets(rule, node, selectedEntries: null);
             }
 
             // 親のエントリアセットを走査
@@ -219,6 +243,19 @@ namespace AddrAuditor.Editor
             return totalDepCount;
         }
 
+        bool IsHitSelectedEntry(AssetBundleBuild bundleInfo)
+        {
+            foreach (var assetName in bundleInfo.assetNames)
+            {
+                foreach (var selectedEntry in this.graphSetting.selectedEntries)
+                {
+                    if (assetName == selectedEntry.AssetPath)
+                        return true;
+                }
+            }
+            return false;
+        }
+
         void ViewEntries(DependenciesRule rule)
         {
             this.bundleNodes.Clear();
@@ -245,20 +282,11 @@ namespace AddrAuditor.Editor
                 }
 
                 // 指定エントリ名でフィルタリング for Pack Separately
-                if (this.graphSetting.selectedEntry != null)
+                if (this.graphSetting.selectedEntries.Count == 1 && this.graphSetting.selectedEntries[0] == null)
                 {
-                    var hit = false;
                     var bundleInfo = rule.allBundleInputDefs.Find(val => val.assetBundleName == bundleName);
-                    foreach (var assetName in bundleInfo.assetNames)
-                    {
-                        if (assetName == this.graphSetting.selectedEntry.AssetPath)
-                        {
-                            hit = true;
-                            break;
-                        }
-                    }
 
-                    if (!hit)
+                    if (!IsHitSelectedEntry(bundleInfo))
                         continue;
                 }
 
@@ -270,7 +298,7 @@ namespace AddrAuditor.Editor
                 this.AddElement(node);
 
                 // 内容物表示
-                CreateOutputPortsWithAssets(rule, node, this.graphSetting.selectedEntry);
+                CreateOutputPortsWithAssets(rule, node, this.graphSetting.selectedEntries);
 
                 // implicitノード作成
                 //var totalDepth = 0;

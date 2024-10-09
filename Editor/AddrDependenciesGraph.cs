@@ -73,7 +73,7 @@ namespace AddrAuditor.Editor
         public string residentGroupGuid;
         public AddrDependenciesGraph rootGraph;
         public List<AddressableAssetGroup> selectedGroups;
-        public AddressableAssetEntry selectedEntry;
+        public List<AddressableAssetEntry> selectedEntries;
         public bool enabledResidentNode;
         public bool enabledShaderNode;
         public bool enabledSharedNode;
@@ -89,19 +89,20 @@ namespace AddrAuditor.Editor
         GraphView graphView = null;
         DependenciesRule bundleRule = new ();
         AddrAutoGroupingSettings groupingSettings;
-        Box mainBox;
+        private Box primaryBox, secondaryBox, tertiaryBox;
 
         [SerializeField] private List<IgnorePrefix> ignorePrefixList = new ();
 
         internal void UpdateBundleDependencies(BundlesGraph.TYPE graphType, GraphSetting graphSetting, string focusBundleName)
         {
-            if (this.mainBox is not null)
-                this.rootVisualElement.Remove(this.mainBox);
+            if (this.primaryBox is not null)
+                this.rootVisualElement.Remove(this.primaryBox);
             if (this.graphView is not null)
                 this.rootVisualElement.Remove(this.graphView);
             this.graphView = new BundlesGraph(graphType, graphSetting, this.bundleRule, focusBundleName);
             this.rootVisualElement.Add(this.graphView);
-            this.rootVisualElement.Add(this.mainBox);
+            this.rootVisualElement.Add(this.primaryBox);
+            this.graphView.SendToBack();
         }
 
         public void CreateGUI()
@@ -109,11 +110,22 @@ namespace AddrAuditor.Editor
             this.groupingSettings = AssetDatabase.LoadAssetAtPath<AddrAutoGroupingSettings>(AddrAutoGrouping.SETTINGS_PATH);
             var settings = AddressableAssetSettingsDefaultObject.Settings;
 
-            this.mainBox = new Box();
-            this.mainBox.style.width = 300f;
-            this.rootVisualElement.Add(this.mainBox);
+            this.primaryBox = new Box();
+            this.primaryBox.style.width = 300f;
+            this.rootVisualElement.Add(this.primaryBox);
+            this.secondaryBox = new Box();
+            this.secondaryBox.style.position = Position.Absolute;;
+            this.secondaryBox.style.width = 300f;
+            this.secondaryBox.style.left = 300f;
+            this.rootVisualElement.Add(this.secondaryBox);
+            this.tertiaryBox = new Box();
+            this.tertiaryBox.style.position = Position.Absolute;
+            this.tertiaryBox.style.minWidth = 300f;
+            this.tertiaryBox.style.left = 300f;
+            this.rootVisualElement.Add(this.tertiaryBox);
 
-            AddrUtility.CreateSpace(this.mainBox);
+            // 上端少し空ける
+            AddrUtility.CreateSpace(this.primaryBox);
 
             // Select Group
             var activeGroups = settings.groups.FindAll(group =>
@@ -126,40 +138,37 @@ namespace AddrAuditor.Editor
             });
             var displayedGroups = new List<AddressableAssetGroup>(activeGroups);
             displayedGroups.Insert(0, null);
-            var selectedGroupField = new PopupField<AddressableAssetGroup>("Selected Group", displayedGroups, 0,
-                value => value != null ? value.name : "all",
-                value => value != null ? value.name : "all");
+            var selectedGroupField = new MultiSelectField<AddressableAssetGroup>(this, secondaryBox, displayedGroups, "Select Groups", "Groups",
+                value => value == null ? "ALL" : value.name,
+                state => this.tertiaryBox.style.left = state ? 600f : 300f);
             selectedGroupField.name = "SelectedGroup";
             selectedGroupField.tooltip = "表示するグループ\n\n The group what you want to analyze.";
-            this.mainBox.Add(selectedGroupField);
+            this.primaryBox.Add(selectedGroupField);
 
             // Select Entry
             var entryList = new List<AddressableAssetEntry>() { null };
-            if (selectedGroupField.value != null)
-                entryList.AddRange(selectedGroupField.value.entries);
-            var selectedEntryField = new PopupField<AddressableAssetEntry>("Selected Entry", entryList, 0,
-                value => value == null ? "all" : value.address,
-                value => value == null ? "all" : value.address);
+            var selectedEntryField = new MultiSelectField<AddressableAssetEntry>(this, tertiaryBox, entryList, "Select Entries", "Entry",
+                value => value == null ? "ALL" : value.address, null);
             selectedEntryField.name = "SelectedEntry";
             selectedEntryField.tooltip = "指定グループの中の特定のエントリに表示範囲を限定します\n\n The specific entry in the group what you want to analyze.";
-            this.mainBox.Add(selectedEntryField);
+            this.primaryBox.Add(selectedEntryField);
 
             // Options
-            var residentNodeToggle = AddrUtility.CreateToggle(this.mainBox,
+            var residentNodeToggle = AddrUtility.CreateToggle(this.primaryBox,
                 "Visible Resident Groups",
                 "常駐アセットグループを表示します。\n\n If disabled, resident nodes are hidden.",
                 true);
-            var sharedNodeToggle = AddrUtility.CreateToggle(this.mainBox,
+            var sharedNodeToggle = AddrUtility.CreateToggle(this.primaryBox,
                 "Visible Shared Groups",
                 "自動生成されたSharedグループを表示します。\n\n If disabled, shared nodes that are created automatically are hidden.",
                 true);
-            var shaderNodeToggle = AddrUtility.CreateToggle(this.mainBox,
+            var shaderNodeToggle = AddrUtility.CreateToggle(this.primaryBox,
                 "Visible Shader Group",
                 "自動生成されたShaderグループを表示します。\n\n If disabled, shader node that are created automatically is hidden.",
                 true);
             var depthRoot = new VisualElement();
             depthRoot.style.flexDirection = FlexDirection.Row;
-            this.mainBox.Add(depthRoot);
+            this.primaryBox.Add(depthRoot);
             const int defaultDepth = 0;
             var depthSlider = AddrUtility.CreateSliderInt(depthRoot,
                 "Visible Depth",
@@ -177,29 +186,33 @@ namespace AddrAuditor.Editor
                 depthSlider.SetValueWithoutNotify(val);
             });
             depthSlider.RegisterValueChangedCallback((ev) => { depthInteger.SetValueWithoutNotify(ev.newValue); });
-            this.CreateStringList(this.mainBox,
+            this.CreateStringList(this.primaryBox,
                 "Ignore Keyword",
                 "特定の文字列をグループ名に含む場合にノード表示を省略します。\n\n Hide the groups if their name contain string here.");
 
             // Groupが変更されたらEntryのリストを更新
-            selectedGroupField.RegisterCallback<ChangeEvent<AddressableAssetGroup>>((ev) =>
+            selectedGroupField.OnSelectionChanged = selectedGroups =>
             {
                 entryList.Clear();
                 entryList.Add(null);
-                if (ev.newValue != null)
+                foreach (var group in selectedGroups)
                 {
-                    foreach (var entry in ev.newValue.entries)
+                    // null group if ALL is selected
+                    if (group == null)
+                        break;
+                    foreach (var entry in group.entries)
                         entryList.Add(entry);
                 }
-                selectedEntryField.index = 0;
-            });
+                //selectedEntryField.index = 0;
+                selectedEntryField.UpdateList(entryList);
+            };
 
             // Space
-            AddrUtility.CreateSpace(this.mainBox);
+            AddrUtility.CreateSpace(this.primaryBox);
 
             // Clear Analysis Button
             {
-                var button = AddrUtility.CreateButton(this.mainBox,
+                var button = AddrUtility.CreateButton(this.primaryBox,
                     "Clear Addressables Analysis",
                     "設定やエントリが更新された際にキャッシュをクリアしてください。\n\n" +
                     "You should clear the cache if settings or entries are updated.");
@@ -215,11 +228,11 @@ namespace AddrAuditor.Editor
             }
 
             // Space
-            AddrUtility.CreateSpace(this.mainBox);
+            AddrUtility.CreateSpace(this.primaryBox);
 
             // Bundle-Dependencies Button
             {
-                var button = AddrUtility.CreateButton(this.mainBox, 
+                var button = AddrUtility.CreateButton(this.primaryBox, 
                     "View Bundle-Dependencies",
                     "暗黙的にロードされるAssetBundleを確認できます\n\n" +
                     "You can check assetbundles that are loaded implicitly.");
@@ -227,32 +240,28 @@ namespace AddrAuditor.Editor
                 {
                     this.bundleRule.Execute();
 
-                    var selectedEntry = selectedEntryField.index > 0 ? selectedEntryField.value : null;
                     var graphSetting = new GraphSetting()
                     {
                         rootGraph = this,
                         residentGroupGuid = this.groupingSettings.residentGroupGUID,
-                        selectedEntry = selectedEntry,
+                        selectedEntries = selectedEntryField.selectedValues,
                         enabledShaderNode = shaderNodeToggle.value,
                         enabledSharedNode = sharedNodeToggle.value,
                         enabledResidentNode = residentNodeToggle.value,
                         enabledDepth = depthSlider.value,
                         ignoreList = new List<IgnorePrefix>(this.ignorePrefixList),
                     };
-                    if (selectedGroupField.value != null)
-                        graphSetting.selectedGroups = new List<AddressableAssetGroup> { selectedGroupField.value };
-                    else
-                        graphSetting.selectedGroups = new List<AddressableAssetGroup>(activeGroups);
+                    graphSetting.selectedGroups = new List<AddressableAssetGroup>(selectedGroupField.selectedValues);
                     this.UpdateBundleDependencies(BundlesGraph.TYPE.BUNDLE_DEPENDENCE, graphSetting, "");
                 };
             }
 
             // Space
-            AddrUtility.CreateSpace(this.mainBox);
+            AddrUtility.CreateSpace(this.primaryBox);
 
             // Asset-Dependencies Button
             {
-                var button = AddrUtility.CreateButton(this.mainBox, 
+                var button = AddrUtility.CreateButton(this.primaryBox, 
                     "View Asset-Dependencies",
                     "AssetBundleに含まれるAssetの依存関係を表示します\n\n" +
                     "You can check dependencies between assets.");
@@ -260,26 +269,22 @@ namespace AddrAuditor.Editor
                 {
                     this.bundleRule.Execute();
 
-                    var selectedEntry = selectedEntryField.index > 0 ? selectedEntryField.value : null;
                     var graphSetting = new GraphSetting()
                     {
                         rootGraph = this,
-                        selectedEntry = selectedEntry,
+                        selectedEntries = selectedEntryField.selectedValues,
                         enabledShaderNode = shaderNodeToggle.value,
                         enabledSharedNode = sharedNodeToggle.value,
                         enabledResidentNode = residentNodeToggle.value,
                         enabledDepth = depthSlider.value,
                         ignoreList = new List<IgnorePrefix>(this.ignorePrefixList),
                     };
-                    if (selectedGroupField.value != null)
-                        graphSetting.selectedGroups = new List<AddressableAssetGroup> { selectedGroupField.value };
-                    else
-                        graphSetting.selectedGroups = new List<AddressableAssetGroup>(activeGroups);
+                    graphSetting.selectedGroups = new List<AddressableAssetGroup>(selectedGroupField.selectedValues);
                     this.UpdateBundleDependencies(BundlesGraph.TYPE.ASSET_DEPENDENCE, graphSetting, "");
                 };
             }
 
-            AddrUtility.CreateSpace(this.mainBox);
+            AddrUtility.CreateSpace(this.primaryBox);
         }
 
         void CreateStringList(VisualElement root, string title, string tooltip)

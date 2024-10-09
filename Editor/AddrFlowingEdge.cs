@@ -3,30 +3,33 @@
 
 using System.Reflection;
 using UnityEngine;
+using UnityEditor.Experimental.GraphView;
+#if ENABLED_ANIMATION
 using UnityEngine.UIElements;
 using UnityEditor;
-using UnityEditor.Experimental.GraphView;
+/// Adjusted the following:
+/// https://forum.unity.com/threads/how-to-add-flow-effect-to-edges-in-graphview.1326012/
+#endif
 
 namespace AddrAuditor.Editor
 {
     /// <summary>
-    /// display line flow
-    /// Adjusted the following:
-    /// https://forum.unity.com/threads/how-to-add-flow-effect-to-edges-in-graphview.1326012/
+    /// custom edge
     /// </summary>
     public class FlowingEdge : Edge
     {
-        const float FLOW_SPEED = 150f;
-        
-        float _flowSize = 6f;
-        readonly Image flowImg;
-
-        float totalEdgeLength, passedEdgeLength, currentPhaseLength;
-        int phaseIndex;
-        double phaseStartTime, phaseDuration;
+        private static readonly Color SELECTED_COLOR = Color.green;
 
         readonly FieldInfo selectedColorField;
         Color selectedDefaultColor;
+
+#if ENABLED_ANIMATION
+        const float FLOW_SPEED = 150f;
+        float _flowSize = 6f;
+        readonly Image flowImg;
+        float totalEdgeLength, passedEdgeLength, currentPhaseLength;
+        int phaseIndex;
+        double phaseStartTime, phaseDuration;
 
         /// <summary>
         /// ポイントサイズ
@@ -41,6 +44,7 @@ namespace AddrAuditor.Editor
                 this.flowImg.style.height = new Length(this._flowSize, LengthUnit.Pixel);
             }
         }
+#endif
 
         /// <summary>
         /// ポイント表示の有効無効
@@ -58,19 +62,25 @@ namespace AddrAuditor.Editor
                 if (value)
                 {
                     this.selectedDefaultColor = (Color)this.selectedColorField.GetValue(this);
+#if ENABLED_ANIMATION
                     this.Add(this.flowImg);
                     this.ResetFlowing();
+#endif
                 }
                 else
                 {
+#if ENABLED_ANIMATION
                     this.Remove(this.flowImg);
+#endif
                     this.selectedColorField.SetValue(this, this.selectedDefaultColor);
+                    this.edgeControl.inputColor = this.edgeControl.outputColor = this.selectedDefaultColor;
                 }
             }
         }
 
         public FlowingEdge()
         {
+#if ENABLED_ANIMATION
             this.flowImg = new Image
             {
                 name = "flow-image",
@@ -84,11 +94,10 @@ namespace AddrAuditor.Editor
                     borderBottomRightRadius = new Length(flowSize / 2, LengthUnit.Pixel),
                 },
             };
-#if ENABLED_ANIMATION
             this.schedule.Execute(timer => { this.UpdateFlow(); }).Every(66); // 15fpsで更新
+            this.edgeControl.RegisterCallback<GeometryChangedEvent>(OnEdgeControlGeometryChanged);
 #endif
             this.capabilities &= ~Capabilities.Deletable; // Edgeの削除を禁止
-            this.edgeControl.RegisterCallback<GeometryChangedEvent>(OnEdgeControlGeometryChanged);
 
             // 本来はCustomStyleで設定するものだが面倒なのでReflection
             this.selectedColorField = typeof(Edge).GetField("m_SelectedColor", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -103,10 +112,14 @@ namespace AddrAuditor.Editor
             // 内部的に戻されるので都度設定する
             // そもそも色を変えることを想定されていない
             if (this.activeFlow)
-                this.selectedColorField.SetValue(this, Color.green);
+            {
+                this.selectedColorField.SetValue(this, SELECTED_COLOR);
+                this.edgeControl.inputColor = this.edgeControl.outputColor = SELECTED_COLOR;
+            }
             return base.UpdateEdgeControl();
         }
-
+        
+#if ENABLED_ANIMATION
         /// <summary>
         /// 定時更新
         /// </summary>
@@ -182,7 +195,11 @@ namespace AddrAuditor.Editor
             }
 
             if (this.activeFlow)
-                this.selectedColorField.SetValue(this, Color.green);
+            {
+                this.selectedColorField.SetValue(this, SELECTED_COLOR);
+                this.edgeControl.inputColor = this.edgeControl.outputColor = SELECTED_COLOR;
+            }
         }
+#endif
     }
 }

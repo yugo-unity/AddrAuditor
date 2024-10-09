@@ -66,11 +66,12 @@ namespace AddrAuditor.Editor
             root.Add(helpbox);
         }
 
-        public static void CreateSpace(VisualElement root, float ratio = 1f)
+        public static Box CreateSpace(VisualElement root, float ratio = 1f)
         {
             var box = new Box();
             box.style.height = new Length(10f * ratio, LengthUnit.Pixel);
             root.Add(box);
+            return box;
         }
 
         public static Button CreateButton(VisualElement root, string text, string tooltip)
@@ -83,13 +84,13 @@ namespace AddrAuditor.Editor
             return button;
         }
 
-        public static Toggle CreateToggle(VisualElement root, string title, string tooltip, bool defaultValue)
+        public static Toggle CreateToggle(VisualElement root, string title, string tooltip, bool defaultValue, float minWidth = 270f)
         {
             var toggle = new Toggle(title);
             toggle.name = title;
             toggle.tooltip = tooltip;
             toggle.value = defaultValue;
-            toggle.labelElement.style.minWidth = 270f;
+            toggle.labelElement.style.minWidth = minWidth;
             root.Add(toggle);
 
             return toggle;

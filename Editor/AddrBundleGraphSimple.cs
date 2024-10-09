@@ -24,6 +24,7 @@ namespace AddrAuditor.Editor
         /// <summary>
         /// 内容物をOutputポートに登録
         /// </summary>
+        /// <param name="node">判定ノード</param>
         static void CreateOutputPort(BundleNode node)
         {
             if (node is null || node.bundleName.Contains(AddrUtility.UNITY_BUILTIN_SHADERS))
@@ -37,6 +38,13 @@ namespace AddrAuditor.Editor
             node.output.Add(node.bundleName, output);
         }
 
+        /// <summary>
+        /// 指定bundleのノードを追加
+        /// </summary>
+        /// <param name="rule">解析データ</param>
+        /// <param name="parentNode">親ノード</param>
+        /// <param name="bundleName">指定bundle</param>
+        /// <param name="depth">現在の深度</param>
         void AddBundleNode(DependenciesRule rule, BundleNode parentNode, string bundleName, int depth)
         {
             BundleNode node;
@@ -112,6 +120,39 @@ namespace AddrAuditor.Editor
             node.RefreshExpandedState();
         }
 
+        /// <summary>
+        /// 指定エントリが指定bundleに含まれてるか
+        /// </summary>
+        /// <param name="rule">解析データ</param>
+        /// <param name="bundleName">指定bundle</param>
+        /// <param name="entries">指定エントリ</param>
+        /// <returns>含まれてるか</returns>
+        static bool IsContainedEntries(DependenciesRule rule, string bundleName, List<AddressableAssetEntry> entries)
+        {
+            // if null exists, ALL is selected
+            if (entries.Contains(null))
+                return true;
+            
+            var info = rule.allBundleInputDefs.Find(val => val.assetBundleName == bundleName);
+            foreach (var assetName in info.assetNames)
+            {
+                foreach (var entry in entries)
+                {
+                    // null entry if ALL is selected
+                    if (entry == null)
+                        continue;
+                    if (assetName == entry.AssetPath)
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Bundle依存関係の表示
+        /// </summary>
+        /// <param name="rule">解析データ</param>
         void ViewBundles(DependenciesRule rule)
         {
             this.bundleNodes.Clear();
@@ -121,6 +162,9 @@ namespace AddrAuditor.Editor
             var bundleNames = new List<string>(20000);
             foreach (var group in this.graphSetting.selectedGroups)
             {
+                // null group if ALL is selected
+                if (group == null)
+                    continue;
                 if (context.assetGroupToBundles.TryGetValue(group, out var names))
                     bundleNames.AddRange(names);
             }
@@ -137,24 +181,11 @@ namespace AddrAuditor.Editor
                     continue;
                 }
 
-                // 指定エントリ名でフィルタリング
-                if (this.graphSetting.selectedEntry != null)
-                {
-                    var hit = false;
-                    var bundleInfo = rule.allBundleInputDefs.Find(val => val.assetBundleName == bundleName);
-                    foreach (var assetName in bundleInfo.assetNames)
-                    {
-                        if (assetName == this.graphSetting.selectedEntry.AssetPath)
-                        {
-                            hit = true;
-                            break;
-                        }
-                    }
+                // 指定エントリ名が含まれてるか
+                if (!IsContainedEntries(rule, bundleName, this.graphSetting.selectedEntries))
+                    return;
 
-                    if (!hit)
-                        continue;
-                }
-
+                // explicitノード作成
                 if (!CreateBundleNode(context, bundleName, isExplicit: true, this.graphSetting, out var node))
                         continue;
                 this.explicitNodes.Add(bundleName);
