@@ -93,18 +93,6 @@ namespace AddrAuditor.Editor
 
         [SerializeField] private List<IgnorePrefix> ignorePrefixList = new ();
 
-        internal void UpdateBundleDependencies(BundlesGraph.TYPE graphType, GraphSetting graphSetting, string focusBundleName)
-        {
-            if (this.primaryBox is not null)
-                this.rootVisualElement.Remove(this.primaryBox);
-            if (this.graphView is not null)
-                this.rootVisualElement.Remove(this.graphView);
-            this.graphView = new BundlesGraph(graphType, graphSetting, this.bundleRule, focusBundleName);
-            this.rootVisualElement.Add(this.graphView);
-            this.rootVisualElement.Add(this.primaryBox);
-            this.graphView.SendToBack();
-        }
-
         public void CreateGUI()
         {
             this.groupingSettings = AssetDatabase.LoadAssetAtPath<AddrAutoGroupingSettings>(AddrAutoGrouping.SETTINGS_PATH);
@@ -186,8 +174,7 @@ namespace AddrAuditor.Editor
                 depthSlider.SetValueWithoutNotify(val);
             });
             depthSlider.RegisterValueChangedCallback((ev) => { depthInteger.SetValueWithoutNotify(ev.newValue); });
-            this.CreateStringList(this.primaryBox,
-                "Ignore Keyword",
+            CreateStringList(this, this.primaryBox, "Ignore Keyword",
                 "特定の文字列をグループ名に含む場合にノード表示を省略します。\n\n Hide the groups if their name contain string here.");
 
             // Groupが変更されたらEntryのリストを更新
@@ -287,11 +274,23 @@ namespace AddrAuditor.Editor
             AddrUtility.CreateSpace(this.primaryBox);
         }
 
-        void CreateStringList(VisualElement root, string title, string tooltip)
+        internal void UpdateBundleDependencies(BundlesGraph.TYPE graphType, GraphSetting graphSetting, string focusBundleName)
+        {
+            if (this.primaryBox is not null)
+                this.rootVisualElement.Remove(this.primaryBox);
+            if (this.graphView is not null)
+                this.rootVisualElement.Remove(this.graphView);
+            this.graphView = new BundlesGraph(graphType, graphSetting, this.bundleRule, focusBundleName);
+            this.rootVisualElement.Add(this.graphView);
+            this.rootVisualElement.Add(this.primaryBox);
+            this.graphView.SendToBack();
+        }
+
+        static void CreateStringList(AddrDependenciesGraph graph, VisualElement root, string title, string tooltip)
         {
             root.Add(new Label() { text = title, tooltip = tooltip, style = { paddingLeft = 4f } });
 
-            var so = new SerializedObject(this);
+            var so = new SerializedObject(graph);
             // NOTE:
             // GraphViewのNodeだとStyleを変更してもListViewを追加するとForcus範囲が縦いっぱいになる不具合がある
             // GraphViewやめてUIElements.Boxにする

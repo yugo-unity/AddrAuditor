@@ -9,7 +9,6 @@
  * Please review the license for details on these and other terms and conditions.
  ***********************************************************************************************************/
 
-using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.AddressableAssets;
@@ -76,10 +75,6 @@ namespace AddrAuditor.Editor
 
         static void UtilityButtons(VisualElement root, AddressableAssetSettings settings)
         {
-            // var box = new VisualElement();
-            // box.style.flexDirection = FlexDirection.Row;
-            // box.style.alignSelf = new StyleEnum<Align>(Align.Center);
-
             var button = AddrUtility.CreateButton(root, "Open and Sort Addressables Groups",
                 "Addressables Group Windowを開きます。\n\n" +
                 "Open Addressables window, just as shortcut.");
@@ -110,15 +105,14 @@ namespace AddrAuditor.Editor
             button = AddrUtility.CreateButton(root, "Analyze & Suggest any settings",
                 "プロジェクトを解析して設定の提案を行います。\n\n" +
                 "Analyze Addressables settings and Suggest better one for console.");
-            button.style.color = Color.gray;
             button.style.width = SINGLE_BUTTON_WIDTH;
             button.style.alignSelf = new StyleEnum<Align>(Align.Center);
             button.clicked += () =>
             {
-                throw new Exception("TODO: new feature");
+                var window = GetWindow<AddrAnalyzeWindow>("ADDR Analyze Window");
+                window.minSize = new Vector2(400f, 450f);
+                window.Show();
             };
-            
-            //root.Add(box);
         }
 
         static void SelectResidentGroup(VisualElement root, AddressableAssetSettings settings, AddrAutoGroupingSettings groupingSettings)
