@@ -8,37 +8,47 @@ namespace AddrAuditor.Editor
 {
     internal partial class AddrAnalyzeWindow : EditorWindow
     {
-        abstract class SubCategoryView
+        /// <summary>
+        /// TODO: 解析用
+        /// </summary>
+        public static void Analyzing()
         {
-            public TwoPaneSplitView root;
-            public ListView treeList;
-            public Label detailsLabel;
-            public Label recommendationLabel;
-
-            public abstract void UpdateView();
+            var settingsPath = $"Assets/{nameof(AddrAutoGroupingSettings)}.asset";
+            var groupingSettings = AssetDatabase.LoadAssetAtPath<AddrAutoGroupingSettings>(settingsPath);
         }
-        
+
         static readonly List<string> MAIN_CATEGORIES = new ()
         {
             "   Addressables Asset Settings",
             "   Addressables Group Settings",
             "   Duplicate Assets",
             "   Built-in Assets",
-            "   Unused Material Properties"
+            "   Unused Material Properties",
+            "   Missing Asset References",
         };
         
         SubCategoryView[] subCategories;
-        VisualElement mainSplitView;
+        TwoPaneSplitView mainSplitView;
+        VisualElement rightPane;
         
-        public void CreateGUI()
+        /// <summary>
+        /// Window初回構築
+        /// </summary>
+        void CreateGUI()
         {
-            var root = this.rootVisualElement;
             this.subCategories = new SubCategoryView[MAIN_CATEGORIES.Count];
-            
             this.mainSplitView = new TwoPaneSplitView(0, 200, TwoPaneSplitViewOrientation.Horizontal);
+         
+            var root = this.rootVisualElement;   
+            var header = new Box();
+            var colorElement = 0.24f;
+            header.style.backgroundColor = new Color(colorElement, colorElement, colorElement, 1f);
+            header.style.height = 20f;
+            header.style.borderBottomWidth = 1;
+            header.style.borderBottomColor = Color.black;
+            root.Add(header);
             
             // 左側のカテゴリリスト
-            var leftPane = new Box(); 
             var categories = new ListView(MAIN_CATEGORIES);
             categories.makeItem = () => 
             {
@@ -52,9 +62,9 @@ namespace AddrAuditor.Editor
                     label.text = MAIN_CATEGORIES[index];
             };
             categories.Rebuild();
-            categories.selectionChanged += this.OnLeftSelectionChanged;
-            leftPane.Add(categories);
-            this.mainSplitView.Add(leftPane);
+            categories.selectedIndex = 0;
+            categories.selectedIndicesChanged += this.OnCategoryChanged;
+            this.mainSplitView.Add(categories);
             
             // 右側のView生成
             this.subCategories[0] = CreateSubCategoryView<AnalyzeViewAddrSetting>();
@@ -62,79 +72,35 @@ namespace AddrAuditor.Editor
             this.subCategories[2] = CreateSubCategoryView<AnalyzeViewAddrSetting>();
             this.subCategories[3] = CreateSubCategoryView<AnalyzeViewGroupSetting>();
             this.subCategories[4] = CreateSubCategoryView<AnalyzeViewAddrSetting>();
-            this.mainSplitView.Add(this.subCategories[0].root);
+
+            // NOTE: TwoPaneSplitViewは初回だけRightPaneの挙動が違う
+            //       おそらく動的にPaneを再構築するのを想定してない
+            this.rightPane = new Box();
+            this.mainSplitView.Add(this.rightPane);
+            this.UpdateSubView(0);
             
             root.Add(this.mainSplitView);
         }
 
+        /// <summary>
+        /// RightPaneの再構築
+        /// </summary>
+        /// <param name="index"></param>
         void UpdateSubView(int index)
         {
             this.subCategories[index].UpdateView();
-            this.mainSplitView.Add(this.subCategories[index].root);
+            this.rightPane.Clear();
+            this.rightPane.Add(this.subCategories[index].root);
         }
 
-        void OnLeftSelectionChanged(IEnumerable<object> selectedItems)
+        /// <summary>
+        /// メインカテゴリが変更された際のLeftPaneの再構築
+        /// </summary>
+        /// <param name="selectedItems">選択された項目</param>
+        void OnCategoryChanged(IEnumerable<int> selectedItems)
         {
-            if (selectedItems.FirstOrDefault() is string selectedItem)
-            {
-                // 右側のリスト更新
-                var index = MAIN_CATEGORIES.IndexOf(selectedItem);
-                this.mainSplitView.RemoveAt(1);
-                this.UpdateSubView(index);
-            }
-        }
-
-        static T CreateSubCategoryView<T>() where T : SubCategoryView, new()
-        {
-            var view = new T();
-            var splitView = new TwoPaneSplitView(0, 300, TwoPaneSplitViewOrientation.Horizontal);
-            
-            var treeList = new ListView();
-            treeList.makeItem = () => 
-            {
-                var label = new Label();
-                label.style.unityTextAlign = TextAnchor.MiddleLeft;
-                return label;
-            };
-            treeList.bindItem = (element, index) =>
-            {
-                if (element is Label label)
-                {
-                    if (treeList.itemsSource is List<string> list)
-                        label.text = list[index];
-                }
-            };
-            splitView.Add(treeList);
-            view.treeList = treeList;
-            
-            var de_re_view = new TwoPaneSplitView(0, 200, TwoPaneSplitViewOrientation.Vertical);
-
-            var box = new Box();
-            var header = new Label("Details");
-            header.style.unityFontStyleAndWeight = FontStyle.Bold;
-            box.Add(header);
-            view.detailsLabel = new Label("explain what is setting"); 
-            box.Add(view.detailsLabel);
-            foreach (var child in box.Children())
-                child.style.left = 10f;
-            de_re_view.Add(box);
-            
-            box = new Box();
-            header = new Label("Recommendation");
-            header.style.unityFontStyleAndWeight = FontStyle.Bold;
-            box.Add(header);
-            view.recommendationLabel = new Label("About recommended setting");
-            box.Add(view.recommendationLabel);
-            foreach (var child in box.Children())
-                child.style.left = 10f;
-            de_re_view.Add(box);
-            
-            splitView.Add(de_re_view);
-
-            view.root = splitView;
-            view.UpdateView(); // 初期更新
-
-            return view;
+            var index = selectedItems.First();
+            this.UpdateSubView(index);
         }
     }
 }

@@ -99,12 +99,12 @@ namespace AddrAuditor.Editor
             var settings = AddressableAssetSettingsDefaultObject.Settings;
 
             this.primaryBox = new Box();
-            this.primaryBox.style.width = 300f;
+            this.primaryBox.style.width = 250f;
             this.rootVisualElement.Add(this.primaryBox);
             this.secondaryBox = new Box();
             this.secondaryBox.style.position = Position.Absolute;;
             this.secondaryBox.style.width = 300f;
-            this.secondaryBox.style.left = 300f;
+            this.secondaryBox.style.left = 250f;
             this.rootVisualElement.Add(this.secondaryBox);
             this.tertiaryBox = new Box();
             this.tertiaryBox.style.position = Position.Absolute;
@@ -128,7 +128,7 @@ namespace AddrAuditor.Editor
             displayedGroups.Insert(0, null);
             var selectedGroupField = new MultiSelectField<AddressableAssetGroup>(this, secondaryBox, displayedGroups, "Select Groups", "Groups",
                 value => value == null ? "ALL" : value.name,
-                state => this.tertiaryBox.style.left = state ? 600f : 300f);
+                state => this.tertiaryBox.style.left = state ? 550f : 250f);
             selectedGroupField.name = "SelectedGroup";
             selectedGroupField.tooltip = "表示するグループ\n\n The group what you want to analyze.";
             this.primaryBox.Add(selectedGroupField);
@@ -162,7 +162,7 @@ namespace AddrAuditor.Editor
                 "Visible Depth",
                 "依存関係の表示制限です。0で無効となります。\n\n Limit the number of dependency recursions. 0 means no limit.",
                 defaultDepth, 0, 5);
-            depthSlider.style.width = 250f;
+            depthSlider.style.width = 200f;
             var depthInteger = AddrUtility.CreateInteger(depthRoot,
                 string.Empty, string.Empty,
                 defaultDepth);
@@ -177,7 +177,7 @@ namespace AddrAuditor.Editor
             CreateStringList(this, this.primaryBox, "Ignore Keyword",
                 "特定の文字列をグループ名に含む場合にノード表示を省略します。\n\n Hide the groups if their name contain string here.");
 
-            // Groupが変更されたらEntryのリストを更新
+            // update entries if selected groups are changed
             selectedGroupField.OnSelectionChanged = selectedGroups =>
             {
                 entryList.Clear();

@@ -84,7 +84,7 @@ namespace AddrAuditor.Editor
             return button;
         }
 
-        public static Toggle CreateToggle(VisualElement root, string title, string tooltip, bool defaultValue, float minWidth = 270f)
+        public static Toggle CreateToggle(VisualElement root, string title, string tooltip, bool defaultValue, float minWidth = 220f)
         {
             var toggle = new Toggle(title);
             toggle.name = title;
