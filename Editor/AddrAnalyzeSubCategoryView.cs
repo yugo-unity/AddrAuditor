@@ -55,6 +55,7 @@ namespace AddrAuditor.Editor
             header.style.unityFontStyleAndWeight = FontStyle.Bold;
             box.Add(header);
             view.detailsLabel = new Label("explain what is setting");
+            view.detailsLabel.style.whiteSpace = WhiteSpace.Normal;
             box.Add(view.detailsLabel);
             foreach (var child in box.Children())
                 child.style.left = 10f;
@@ -65,10 +66,12 @@ namespace AddrAuditor.Editor
             header.style.unityFontStyleAndWeight = FontStyle.Bold;
             box.Add(header);
             view.recommendationLabel = new Label("About recommended setting");
+            view.recommendationLabel.style.whiteSpace = WhiteSpace.Normal;
             box.Add(view.recommendationLabel);
             foreach (var child in box.Children())
                 child.style.left = 10f;
             descriptionSplitView.Add(box);
+            
             subSplitView.Add(descriptionSplitView);
 
             view.root = subSplitView;
