@@ -44,11 +44,13 @@ namespace AddrAuditor.Editor
             {
                 // 指定エントリ名でフィルタリング for Pack Together
                 var hit = true;
-                if (selectedEntries != null)
+                if (selectedEntries != null && !selectedEntries.Contains(null))
                 {
                     hit = false;
                     foreach (var entry in selectedEntries)
                     {
+                        if (entry == null)
+                            continue;
                         if (entry.AssetPath == assetName)
                         {
                             hit = true;

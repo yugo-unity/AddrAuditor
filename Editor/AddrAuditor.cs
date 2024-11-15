@@ -212,6 +212,9 @@ namespace AddrAuditor.Editor
             button.style.width = TWIN_BUTTON_WIDTH;
             button.clicked += () =>
             {
+                // set to Default Build Index
+                settings.ActivePlayerDataBuilderIndex = 0;
+                
                 var completed = false;
                 // recursive process for duplicated assets that duplicated assets have
                 for (var i = 0; i < RECURSIVE_COUNT; ++i)
