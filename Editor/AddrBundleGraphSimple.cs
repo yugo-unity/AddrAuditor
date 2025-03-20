@@ -121,35 +121,6 @@ namespace AddrAuditor.Editor
         }
 
         /// <summary>
-        /// 指定エントリが指定bundleに含まれてるか
-        /// </summary>
-        /// <param name="rule">解析データ</param>
-        /// <param name="bundleName">指定bundle</param>
-        /// <param name="entries">指定エントリ</param>
-        /// <returns>含まれてるか</returns>
-        static bool IsContainedEntries(DependenciesRule rule, string bundleName, List<AddressableAssetEntry> entries)
-        {
-            // if null exists, ALL is selected
-            if (entries.Contains(null))
-                return true;
-            
-            var info = rule.allBundleInputDefs.Find(val => val.assetBundleName == bundleName);
-            foreach (var assetName in info.assetNames)
-            {
-                foreach (var entry in entries)
-                {
-                    // null entry if ALL is selected
-                    if (entry == null)
-                        continue;
-                    if (assetName == entry.AssetPath)
-                        return true;
-                }
-            }
-
-            return false;
-        }
-
-        /// <summary>
         /// Bundle依存関係の表示
         /// </summary>
         /// <param name="rule">解析データ</param>
@@ -182,8 +153,8 @@ namespace AddrAuditor.Editor
                 }
 
                 // 指定エントリ名が含まれてるか
-                if (!IsContainedEntries(rule, bundleName, this.graphSetting.selectedEntries))
-                    return;
+                if (!rule.IsHitSelectedEntry(bundleName, this.graphSetting.selectedEntries))
+                    continue;
 
                 // explicitノード作成
                 if (!CreateBundleNode(context, bundleName, isExplicit: true, this.graphSetting, out var node))

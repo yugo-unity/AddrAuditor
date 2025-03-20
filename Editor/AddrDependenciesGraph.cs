@@ -66,6 +66,26 @@ namespace AddrAuditor.Editor
             this.extractData = null;
             this.allBundleInputDefs = null;
         }
+        
+        /// <summary>
+        /// 指定エントリが指定bundleに含まれているか
+        /// </summary>
+        /// <param name="bundleName">判定bundle名（ハッシュ値もついてる）</param>
+        /// <param name="selectedEntries">GUIで設定したエントリ</param>
+        public bool IsHitSelectedEntry(string bundleName, List<AddressableAssetEntry> selectedEntries)
+        {
+            var bundleInfo = this.allBundleInputDefs.Find(val => val.assetBundleName == bundleName);
+            foreach (var assetName in bundleInfo.assetNames)
+            {
+                foreach (var selectedEntry in selectedEntries)
+                {
+                    // NOTE: "Selected All" provides null
+                    if (selectedEntry == null || assetName == selectedEntry.AssetPath)
+                        return true;
+                }
+            }
+            return false;
+        }
     }
     
     internal struct GraphSetting

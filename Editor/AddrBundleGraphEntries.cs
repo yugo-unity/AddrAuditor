@@ -11,6 +11,7 @@
 
 using System.Collections.Generic;
 using UnityEditor;
+using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.Build.Content;
 using UnityEditor.Experimental.GraphView;
@@ -245,19 +246,6 @@ namespace AddrAuditor.Editor
             return totalDepCount;
         }
 
-        bool IsHitSelectedEntry(AssetBundleBuild bundleInfo)
-        {
-            foreach (var assetName in bundleInfo.assetNames)
-            {
-                foreach (var selectedEntry in this.graphSetting.selectedEntries)
-                {
-                    if (assetName == selectedEntry.AssetPath)
-                        return true;
-                }
-            }
-            return false;
-        }
-
         void ViewEntries(DependenciesRule rule)
         {
             this.bundleNodes.Clear();
@@ -265,12 +253,15 @@ namespace AddrAuditor.Editor
             var depth = 0;
 
             var bundleNames = new List<string>(20000);
-            foreach (var group in this.graphSetting.selectedGroups)
+            var groups = this.graphSetting.selectedGroups ?? AddressableAssetSettingsDefaultObject.Settings.groups;
+            foreach (var group in groups)
             {
+                if (group == null) // NOTE: "Selected All" provides null 
+                    continue;
                 if (context.assetGroupToBundles.TryGetValue(group, out var names))
                     bundleNames.AddRange(names);
             }
-            
+
             foreach (var bundleName in bundleNames)
             {
                 if (bundleName.Contains(AddrUtility.UNITY_BUILTIN_SHADERS))
@@ -283,14 +274,9 @@ namespace AddrAuditor.Editor
                     continue;
                 }
 
-                // 指定エントリ名でフィルタリング for Pack Separately
-                if (this.graphSetting.selectedEntries.Count == 1 && this.graphSetting.selectedEntries[0] == null)
-                {
-                    var bundleInfo = rule.allBundleInputDefs.Find(val => val.assetBundleName == bundleName);
-
-                    if (!IsHitSelectedEntry(bundleInfo))
-                        continue;
-                }
+                // 指定エントリ名が含まれてるか
+                if (!rule.IsHitSelectedEntry(bundleName, this.graphSetting.selectedEntries))
+                    continue;
 
                 // explicitノード作成
                 if (!CreateBundleNode(rule.context, bundleName, isExplicit: true, this.graphSetting, out var node))
