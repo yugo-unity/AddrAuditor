@@ -1,0 +1,201 @@
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEditor;
+using UnityEditor.AddressableAssets;
+using UnityEditor.SceneManagement;
+using UnityEngine.SceneManagement;
+using UnityEngine.UIElements;
+
+namespace AddrAuditor.Editor
+{
+    class MissingAsset
+    {
+        public string assetPath;
+        public string gameObjectPath;
+        public GameObject gameObject;
+    }
+
+    /// <summary>
+    /// Missingになっているアセット参照の検出
+    /// </summary>
+    class AnalyzeViewMissingReferences : SubCategoryView
+    {
+        readonly List<MissingAsset> results = new();
+        ListView listView;
+        Label detailsLabel; // カテゴリの説明文
+        
+        /// <summary>
+        /// 選択された時のコールバック
+        /// </summary>
+        void OnSelectedChanged(IEnumerable<int> selectedItems)
+        {
+            if (selectedItems is not List<int> indexList)
+                return;
+            if (indexList.Count == 0)
+                return;
+
+            var index = indexList[0];
+            if (string.IsNullOrEmpty(this.results[index].assetPath))
+                return;
+            // Project Windowでフォーカスさせる
+            var obj = this.results[index].gameObject;
+            Selection.activeObject = obj;
+            EditorGUIUtility.PingObject(obj);
+        }
+
+        /// <summary>
+        /// 解析処理
+        /// </summary>
+        public override void Analyze()
+        {
+            CollectMissingAssets(this.results);
+        }
+
+        /// <summary>
+        /// GUI構築
+        /// </summary>
+        protected override void OnCreateView()
+        {
+            var box = new VisualElement();
+            var header = new Label("Details");
+            header.style.unityFontStyleAndWeight = FontStyle.Bold;
+            box.Add(header);
+            this.detailsLabel = new Label("explain what is setting");
+            this.detailsLabel.style.whiteSpace = WhiteSpace.Normal;
+            this.detailsLabel.text = "Missingになっているアセット参照をもつComponentを検出します。\n" +
+                                     "該当オブジェクトを確認し、適切に処理してください";
+            box.Add(this.detailsLabel);
+            foreach (var child in box.Children())
+                child.style.left = 10f;
+            this.rootElement.Add(box);
+            
+            this.listView = new ListView();
+            this.listView.fixedItemHeight = 25f;
+            this.listView.selectedIndicesChanged += this.OnSelectedChanged;
+            this.listView.selectionType = SelectionType.Single;
+            this.listView.makeItem = () =>
+            {
+                var label = new Label();
+                label.style.unityTextAlign = TextAnchor.MiddleLeft;
+                return label;
+            };
+            this.listView.bindItem = (element, index) =>
+            {
+                if (this.listView.itemsSource is List<string> missingPath)
+                {
+                    if (element is Label label)
+                        label.text = missingPath[index] ?? "Null Object";
+                    // backgroundColorを設定するとselected Colorが設定できない（cssを要求される）
+                    // if (index % 2 == 0)
+                    //     element.style.backgroundColor = new StyleColor(new Color(0.24f, 0.24f, 0.24f));
+                    // else
+                    //     element.style.backgroundColor = new StyleColor(new Color(0.21f, 0.21f, 0.21f));
+                }
+            };
+            this.rootElement.Add(this.listView);
+        }
+
+        /// <summary>
+        /// 表示の更新
+        /// カテゴリが選択された時に呼ばれる
+        /// </summary>
+        public override void UpdateView()
+        {
+            var labels = new List<string>(results.Count);
+            foreach (var t in results)
+                labels.Add($"   {t.assetPath} : {t.gameObjectPath}");
+            this.listView.ClearSelection();
+            this.listView.itemsSource = labels;
+            this.listView.Rebuild();
+        }
+
+        /// <summary>
+        /// 対象アセットの取得
+        /// </summary>
+        static void CollectMissingAssets(List<MissingAsset> results)
+        {
+            results.Clear();
+            
+            var paths = AssetDatabase.GetAllAssetPaths();
+            foreach (var path in paths)
+            {
+                if (path.Contains("Packages"))
+                    continue;
+                var o = AssetDatabase.LoadMainAssetAtPath(path);
+                switch (o)
+                {
+                    case GameObject go:
+                        DigMissingComponents(results, path, go.name, go);
+                        break;
+                    case SceneAsset:
+                    {
+                        var needToUnload = false;
+                        var scene = SceneManager.GetActiveScene();
+                        if (scene.path != path)
+                        {
+                            needToUnload = true;
+                            scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Additive);
+                        }
+                        if (scene.IsValid())
+                        {
+                            var gameObjects = scene.GetRootGameObjects();
+                            foreach (var go in gameObjects)
+                                DigMissingComponents(results, path, go.name, go);   
+                        }
+                        if (needToUnload)
+                            EditorSceneManager.CloseScene(scene, true);
+                        break;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Missing参照を掘り出す
+        /// </summary>
+        /// <param name="missingList">検出結果</param>
+        /// <param name="assetPath">調べてるアセットのファイルパス</param>
+        /// <param name="objPath">調べてるオブジェクトの階層パス</param>
+        /// <param name="gameObject">調べるGameObject</param>
+        static void DigMissingComponents(List<MissingAsset> missingList, string assetPath, string objPath, GameObject gameObject)
+        {
+            // 現在のGameObjectにアタッチされているコンポーネントの確認
+            var components = gameObject.GetComponents<Component>();
+            foreach (var component in components)
+            {
+                if (component != null)
+                    continue;
+                AddMissingList(missingList, assetPath, objPath, gameObject);
+            }
+
+            // 子のGameObjectを再帰的に検索
+            var transform = gameObject.transform;
+            for (var c = 0; c < transform.childCount; c++)
+            {
+                var t = transform.GetChild(c);
+                var pt = PrefabUtility.GetPrefabAssetType(t.gameObject);
+                if (pt == PrefabAssetType.MissingAsset)
+                    AddMissingList(missingList, assetPath, objPath, t.gameObject);
+                else
+                    DigMissingComponents(missingList, assetPath, $"{objPath}/{t.name}", t.gameObject);
+            }
+        }
+
+        /// <summary>
+        /// Missingが見つかったのでリスト登録
+        /// </summary>
+        /// <param name="list">登録するリスト</param>
+        /// <param name="path">該当のアセットパス</param>
+        /// <param name="objPath">該当のGameObjectパス</param>
+        /// <param name="obj">該当のGameObject</param>
+        static void AddMissingList(List<MissingAsset> list, string path, string objPath, GameObject obj)
+        {
+            list.Add(new MissingAsset()
+            {
+                assetPath = path,
+                gameObjectPath = objPath,
+                gameObject = obj,
+            });
+        }
+    }
+}

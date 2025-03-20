@@ -34,7 +34,7 @@ namespace AddrAuditor.Editor
         {
             var window = GetWindow<AddrAuditor>();
             window.titleContent = new GUIContent("ADDR Auditor");
-            window.minSize = new Vector2(400f, 600f);
+            window.minSize = new Vector2(400f, 510f);
             window.Show();
         }
 
@@ -68,7 +68,7 @@ namespace AddrAuditor.Editor
             
             BuildButton(mainElement, settings, groupingSettings);
             
-            AddrUtility.CreateSpace(mainElement);
+            AddrUtility.CreateSpace(mainElement, 2f);
             
             OptionalButtons(mainElement);
         }
@@ -145,7 +145,7 @@ namespace AddrAuditor.Editor
         static void CreateSharedGroups(VisualElement root, AddressableAssetSettings settings, AddrAutoGroupingSettings groupingSettings)
         {
             var box = new VisualElement();
-            box.style.alignSelf = new StyleEnum<Align>(Align.Center);
+            box.style.alignSelf = Align.Center;
             box.style.minWidth = 371f;
             
             var toggle = AddrUtility.CreateToggle(box,
@@ -182,7 +182,7 @@ namespace AddrAuditor.Editor
             
             box = new VisualElement();
             box.style.flexDirection = FlexDirection.Row;
-            box.style.alignSelf = new StyleEnum<Align>(Align.Center);
+            box.style.alignSelf = Align.Center;
 
             var button = AddrUtility.CreateButton(box, "Remove Shared-Groups",
                 "自動生成されたグループを一括削除します。\n\n" +
@@ -255,7 +255,7 @@ namespace AddrAuditor.Editor
                     postEvent: true, settingsModified: true);
             });
             
-            toggle = AddrUtility.CreateToggle(box, "Use Optimized Provider (for local bundles)",
+            toggle = AddrUtility.CreateToggle(box, "Optimized Provider (for local bundles)",
                 "GroupSchemaにローカル用に最適化したProviderを設定します。\n\n" +
                 "Use optimized providers for local bundles to all GroupSchemas.", groupingSettings.useLocalProvider);
             toggle.RegisterValueChangedCallback((evt) =>
@@ -276,7 +276,7 @@ namespace AddrAuditor.Editor
                     postEvent: true, settingsModified: true);
             });
             
-            toggle = AddrUtility.CreateToggle(box, "Use Optimized Build (for local bundles)",
+            toggle = AddrUtility.CreateToggle(box, "Optimized Build (for local bundles)",
                 "ローカル用に最適化したAddressablesビルドを行います。\n" +
                 "リモートコンテンツを扱う場合、またはEditorでのAssetBundleの挙動を確認する場合は使用しないでください。\n\n" +
                 "Build Addressables with optimization for local bundles.\n" +
@@ -353,26 +353,32 @@ namespace AddrAuditor.Editor
 
         static void OptionalButtons(VisualElement root)
         {
-            var button = AddrUtility.CreateButton(root, "Create Address Defines",
+            var box = new VisualElement();
+            box.style.flexDirection = FlexDirection.Row;
+            box.style.alignSelf = new StyleEnum<Align>(Align.Center);
+            var button = AddrUtility.CreateButton(box, "Create Address Defines",
                 "GUIDのAddress定義クラスを出力します。\n\n" +
                 "[optional] Create a file that is defined GUID of entries.");
-            button.style.width = SINGLE_BUTTON_WIDTH;
+            button.style.width = TWIN_BUTTON_WIDTH;
             button.style.alignSelf = new StyleEnum<Align>(Align.Center);
             button.clicked += CreateAddressDefines;
             
-            button = AddrUtility.CreateButton(root, "Dump Hash/Bundle Name",
+            button = AddrUtility.CreateButton(box, "Dump Hash/Bundle Name",
                 "Bundle名をHashにした際に元の名前をログに出力します。\n\n" +
                 "[optional] Output logs to match hash to bundle name.");
-            button.style.width = SINGLE_BUTTON_WIDTH;
+            button.style.width = TWIN_BUTTON_WIDTH;
             button.style.alignSelf = new StyleEnum<Align>(Align.Center);
             button.clicked += DumpBundleName;
             
-            button = AddrUtility.CreateButton(root, "Remove Unused Material properties", 
-                "未使用のShader Propertyを削除します。\n\n" +
-                "[optional] Remove unused properties in Material.");
-            button.style.width = SINGLE_BUTTON_WIDTH;
-            button.style.alignSelf = new StyleEnum<Align>(Align.Center);
-            button.clicked += CleanupMaterialProperty;
+            root.Add(box);
+            
+            // integrated in Analyze Window
+            // button = AddrUtility.CreateButton(root, "Remove Unused Material properties", 
+            //     "未使用のShader Propertyを削除します。\n\n" +
+            //     "[optional] Remove unused properties in Material.");
+            // button.style.width = SINGLE_BUTTON_WIDTH;
+            // button.style.alignSelf = new StyleEnum<Align>(Align.Center);
+            // button.clicked += CleanupMaterialProperty;
         }
     }
 }

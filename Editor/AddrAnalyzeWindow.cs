@@ -1,27 +1,28 @@
+using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace AddrAuditor.Editor
 {
-    internal partial class AddrAnalyzeWindow : EditorWindow
+    internal class AddrAnalyzeWindow : EditorWindow
     {
-        /// <summary>
-        /// TODO: 解析用
-        /// </summary>
-        public static void Analyzing()
+        enum ANALYZE
         {
-            var settingsPath = $"Assets/{nameof(AddrAutoGroupingSettings)}.asset";
-            var groupingSettings = AssetDatabase.LoadAssetAtPath<AddrAutoGroupingSettings>(settingsPath);
+            ASSET_SETTINGS,
+            GROUP_SETTINGS,
+            DUPLICATED_ASSETS,
+            BUILT_IN_ASSETS,
+            UNUSED_PROP,
+            MISSING_REF,
         }
 
         static readonly List<string> MAIN_CATEGORIES = new ()
         {
             "   Addressables Asset Settings",
             "   Addressables Group Settings",
-            "   Duplicate Assets",
+            "   Duplicated Assets",
             "   Built-in Assets",
             "   Unused Material Properties",
             "   Missing Asset References",
@@ -30,6 +31,7 @@ namespace AddrAuditor.Editor
         SubCategoryView[] subCategories;
         TwoPaneSplitView mainSplitView;
         VisualElement rightPane;
+        int currentCategory;
         
         /// <summary>
         /// Window初回構築
@@ -41,11 +43,29 @@ namespace AddrAuditor.Editor
          
             var root = this.rootVisualElement;   
             var header = new Box();
-            var colorElement = 0.24f;
-            header.style.backgroundColor = new Color(colorElement, colorElement, colorElement, 1f);
-            header.style.height = 20f;
-            header.style.borderBottomWidth = 1;
-            header.style.borderBottomColor = Color.black;
+            {
+                var colorElement = 0.24f;
+                header.style.backgroundColor = new Color(colorElement, colorElement, colorElement, 1f);
+                header.style.height = 32f;
+                header.style.borderBottomWidth = 1;
+                header.style.borderBottomColor = Color.black;
+            }
+            var analyzeButton = new Button();
+            {
+                //analyzeButton.name = "itemButton";
+                analyzeButton.text = "Analyze";
+                analyzeButton.style.alignSelf = Align.FlexEnd;
+                analyzeButton.style.width = 100f;
+                analyzeButton.style.height = 25f;
+                analyzeButton.clicked += () =>
+                {
+                    foreach (var view in this.subCategories)
+                        view.Analyze();
+
+                    this.subCategories[this.currentCategory].UpdateView();
+                };
+            }
+            header.Add(analyzeButton);
             root.Add(header);
             
             // 左側のカテゴリリスト
@@ -63,15 +83,21 @@ namespace AddrAuditor.Editor
             };
             categories.Rebuild();
             categories.selectedIndex = 0;
-            categories.selectedIndicesChanged += this.OnCategoryChanged;
+            categories.selectedIndicesChanged += (selectedItems) =>
+            {
+                // メインカテゴリが変更された際のLeftPaneの再構築
+                var index = selectedItems.First();
+                this.UpdateSubView(index);
+            };
             this.mainSplitView.Add(categories);
             
             // 右側のView生成
-            this.subCategories[0] = CreateSubCategoryView<AnalyzeViewAddrSetting>();
-            this.subCategories[1] = CreateSubCategoryView<AnalyzeViewGroupSetting>();
-            this.subCategories[2] = CreateSubCategoryView<AnalyzeViewAddrSetting>();
-            this.subCategories[3] = CreateSubCategoryView<AnalyzeViewGroupSetting>();
-            this.subCategories[4] = CreateSubCategoryView<AnalyzeViewAddrSetting>();
+            this.subCategories[(int)ANALYZE.ASSET_SETTINGS] = CreateSubView<AnalyzeViewAddrSetting>(true);
+            this.subCategories[(int)ANALYZE.GROUP_SETTINGS] = CreateSubView<AnalyzeViewGroupSetting>(true);
+            this.subCategories[(int)ANALYZE.DUPLICATED_ASSETS] = CreateSubView<AnalyzeViewDuplicatedAssets>(true);
+            this.subCategories[(int)ANALYZE.BUILT_IN_ASSETS] = CreateSubView<AnalyzeViewGroupSetting>(false); // TODO
+            this.subCategories[(int)ANALYZE.UNUSED_PROP] = CreateSubView<AnalyzeViewUnusedMaterialProp>(false);
+            this.subCategories[(int)ANALYZE.MISSING_REF] = CreateSubView<AnalyzeViewMissingReferences>(false);
 
             // NOTE: TwoPaneSplitViewは初回だけRightPaneの挙動が違う
             //       おそらく動的にPaneを再構築するのを想定してない
@@ -88,19 +114,23 @@ namespace AddrAuditor.Editor
         /// <param name="index"></param>
         void UpdateSubView(int index)
         {
+            this.currentCategory = index;
             this.subCategories[index].UpdateView();
             this.rightPane.Clear();
-            this.rightPane.Add(this.subCategories[index].root);
+            this.rightPane.Add(this.subCategories[index].rootElement);
         }
-
+        
         /// <summary>
-        /// メインカテゴリが変更された際のLeftPaneの再構築
+        /// RightPaneの共通生成処理
         /// </summary>
-        /// <param name="selectedItems">選択された項目</param>
-        void OnCategoryChanged(IEnumerable<int> selectedItems)
+        /// <typeparam name="T">SubCategory固有のクラス</typeparam>
+        /// <returns>SubCategory管理クラス</returns>
+        static T CreateSubView<T>(bool splitThree) where T : SubCategoryView, new()
         {
-            var index = selectedItems.First();
-            this.UpdateSubView(index);
+            var view = new T();
+            var orientation = splitThree ? TwoPaneSplitViewOrientation.Horizontal : TwoPaneSplitViewOrientation.Vertical;
+            view.CreateView(orientation);
+            return view;
         }
     }
 }

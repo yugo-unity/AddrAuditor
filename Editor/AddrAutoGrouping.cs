@@ -3,11 +3,11 @@ using UnityEditor;
 using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Build;
 using UnityEditor.AddressableAssets.Build.BuildPipelineTasks;
+using UnityEditor.AddressableAssets.Build.DataBuilders;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.AddressableAssets.Settings.GroupSchemas;
 using UnityEditor.Build.Content;
 using UnityEditor.Build.Pipeline;
-using UnityEditor.Build.Pipeline.Interfaces;
 using UnityEngine;
 using UnityEngine.U2D;
 
@@ -41,7 +41,7 @@ namespace AddrAuditor.Editor
             public readonly List<ImplicitParam> implicitParams = new(); // info of contained assets
         }
 
-        class ImplicitParam
+        public class ImplicitParam
         {
             public string guid;
             public string path;
@@ -50,10 +50,11 @@ namespace AddrAuditor.Editor
             public List<System.Type> usedSubAssetTypes;
 
             public List<string> bundles; // referenced Bundles
+            public List<string> assets; // referenced Assets
             //public long fileSize;
         }
 
-        class SpriteAtlasParam
+        public class SpriteAtlasParam
         {
             public bool isResident;
             public SpriteAtlas instance;
@@ -80,29 +81,10 @@ namespace AddrAuditor.Editor
         {
             var settings = AddressableAssetSettingsDefaultObject.Settings;
 
-            // // 単品のbundleにするAssetのファイルサイズの閾値
-            // var SEPARATE_ASSET_SIZE = (long)groupingSettings.singleThreshold * 1024L;
-
-            if (!BuildUtility.CheckModifiedScenesAndAskToSave())
-            {
-                Debug.LogError("Cannot run Analyze with unsaved scenes");
-                return false;
-            }
-
-            var allBundleInputDefs = new List<AssetBundleBuild>();
-            var bundleToAssetGroup = new Dictionary<string, string>();
-            AddrUtility.CalculateInputDefinitions(settings, allBundleInputDefs, bundleToAssetGroup);
-            var aaContext = AddrUtility.GetBuildContext(settings, bundleToAssetGroup);
-            var extractData = new ExtractDataTask();
-            var exitCode = AddrUtility.RefleshBuild(settings, allBundleInputDefs, extractData, aaContext);
-            if (exitCode < ReturnCode.Success)
-            {
-                Debug.LogError($"Analyze build failed. {exitCode}");
-                return false;
-            }
-
             // get implicit assets
-            var (implicitParams, atlases) = CollectImplicitParams(aaContext.bundleToAssetGroup, extractData.WriteData, groupingSettings);
+            var (implicitParams, atlases, _) = CollectImplicitParams(settings, groupingSettings);
+            if (implicitParams == null)
+                return false;
 
             var sharedGroupParams = new List<SharedGroupParam>();
             var shaderGroupParam = new SharedGroupParam(SHADER_GROUP_NAME, null);
@@ -310,12 +292,35 @@ namespace AddrAuditor.Editor
         /// <summary>
         /// find duplicated implicit assets and get the info
         /// </summary>
-        static (List<ImplicitParam>, List<SpriteAtlasParam>) CollectImplicitParams(Dictionary<string, string> bundleToAssetGroup,
-            IBundleWriteData writeData, AddrAutoGroupingSettings groupingSettings)
+        public static (List<ImplicitParam>, List<SpriteAtlasParam>, AddressableAssetsBuildContext cachedContext)
+            CollectImplicitParams(AddressableAssetSettings settings, AddrAutoGroupingSettings groupingSettings = null)
         {
-            var settings = AddressableAssetSettingsDefaultObject.Settings;
+
+            // // 単品のbundleにするAssetのファイルサイズの閾値
+            // var SEPARATE_ASSET_SIZE = (long)groupingSettings.singleThreshold * 1024L;
+
+            if (!BuildUtility.CheckModifiedScenesAndAskToSave())
+            {
+                Debug.LogError("Cannot run Analyze with unsaved scenes");
+                return (null, null, null);
+            }
+
+            var allBundleInputDefs = new List<AssetBundleBuild>();
+            var bundleToAssetGroup = new Dictionary<string, string>();
+            AddrUtility.CalculateInputDefinitions(settings, allBundleInputDefs, bundleToAssetGroup);
+            var aaContext = AddrUtility.GetBuildContext(settings, bundleToAssetGroup);
+            var extractData = new ExtractDataTask();
+            var exitCode = AddrUtility.RefleshBuild(settings, allBundleInputDefs, extractData, aaContext);
+            if (exitCode < ReturnCode.Success)
+            {
+                Debug.LogError($"Analyze build failed. {exitCode}");
+                return (null, null, null);
+            }
+            
+            var writeData = extractData.WriteData;
             var validImplicitGuids = new Dictionary<GUID, ImplicitParam>();
             var atlases = new List<SpriteAtlasParam>();
+            var hasGroupingSettings = groupingSettings != null; 
 
             foreach (var fileToBundle in writeData.FileToBundle)
             {
@@ -341,7 +346,7 @@ namespace AddrAuditor.Editor
                         // NOTE: TextMeshPro has a legacy structure that depends on Resources
                         if (!AddrUtility.IsPathValidForEntry(path))
                             continue;
-                        if (path.Contains("/Resources/"))
+                        if (hasGroupingSettings && path.Contains("/Resources/"))
                         {
                             var selectedGroup = settings.FindGroup(g => g.Guid == groupGuid);
                             Debug.LogWarning($"Resources Asset is duplicated. - {path} / Group : {selectedGroup.name}");
@@ -356,14 +361,14 @@ namespace AddrAuditor.Editor
                         var type = instance != null ? instance.GetType() : null;
 
                         // NOTE: Material assets are very tiny, to reduce excessive bundle dependencies by allowing duplication
-                        if (groupingSettings.allowDuplicatedMaterial)
+                        if (hasGroupingSettings && groupingSettings.allowDuplicatedMaterial)
                         {
                             if (type == typeof(Material))
                                 continue;
                         }
 
                         var isSubAsset = instance != null && AssetDatabase.IsSubAsset(instance);
-                        var isResident = groupGuid == groupingSettings.residentGroupGUID;
+                        var isResident = hasGroupingSettings && (groupGuid == groupingSettings.residentGroupGUID);
 
                         if (validImplicitGuids.TryGetValue(guid, out var param))
                         {
@@ -398,6 +403,7 @@ namespace AddrAuditor.Editor
                                 isResident = isResident,
                                 usedSubAssetTypes = new List<System.Type>() { type },
                                 bundles = new List<string>() { bundle },
+                                assets = new List<string>() {},
                                 //fileSize = fileSize,
                             };
                             validImplicitGuids.Add(guid, param);
@@ -421,7 +427,7 @@ namespace AddrAuditor.Editor
             }
 
             var implicitParams = new List<ImplicitParam>(validImplicitGuids.Values);
-            return (implicitParams, atlases);
+            return (implicitParams, atlases, aaContext);
         }
     }
 }
