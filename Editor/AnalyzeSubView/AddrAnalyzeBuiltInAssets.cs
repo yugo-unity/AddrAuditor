@@ -3,28 +3,34 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEditor;
+using UnityEditor.Build.Profile;
 
 namespace AddrAuditor.Editor
 {
     /// <summary>
     /// 重複しているアセットの検出
     /// </summary>
-    class AnalyzeViewDuplicatedAssets : SubCategoryView
+    class AnalyzeViewBuiltInAssets : SubCategoryView
     {
-        static readonly string DETAILS_MESSAGE = "重複してAssetBundleに含まれているアセットを検出します。\n" +
-                                                 "適切にグループを設定するかAutoGrouping機能を利用して解決してください。\n" +
-                                                 "Materialなど非常に小さいアセットは、ロード時間を考慮し重複の許容を検討できます。";
-
+        static readonly string DETAILS_MESSAGE = "Built-inとAssetBundleで重複して含まれているアセットを検出します。\n" +
+                                                 "Built-inには極力アセットを含めないよう適切に対応してください。\n" +
+                                                 "またBuilt-inでしか利用しないアセットをAddressableに登録していないか確認してください。";
+            
+        struct DuplicateAsset
+        {
+            public RefAssetData refAssetData; // 重複しているアセット
+            public string builtInAsset; // 参照しているBuiltInアセット 
+        }
+        
         public override bool requireAnalyzeCache => true;
-        readonly List<RefAssetData> duplications = new ();
+        readonly List<DuplicateAsset> duplications = new ();
         readonly List<RefEntry> refEntries = new ();
-
+        
         AnalyzeCache analyzeCache;
         ListView listView;
         VisualElement optionalView;
         Label detailsLabel;
         ListView referenceView;
-        int chosenIndex;
         
         /// <summary>
         /// Callback when any column is selected
@@ -35,20 +41,18 @@ namespace AddrAuditor.Editor
                 return;
             var index = selectedItems.First();
             var dup = this.duplications[index];
-            if (string.IsNullOrEmpty(dup.path))
+            if (string.IsNullOrEmpty(dup.refAssetData.path))
                 return;
             
             // // focusing in Project Window
-            // var obj = AssetDatabase.LoadMainAssetAtPath(dup.path);
+            // var obj = AssetDatabase.LoadMainAssetAtPath(dup.refAssetData.path);
             // Selection.activeObject = obj;
             // EditorGUIUtility.PingObject(obj);
             
-            FindReferencedEntries(this.refEntries, this.analyzeCache, dup);
+            FindReferencedEntries(this.refEntries, this.analyzeCache, dup.refAssetData);
             this.referenceView.ClearSelection();
             this.referenceView.itemsSource = this.refEntries;
             this.referenceView.Rebuild();
-
-            this.chosenIndex = index;
         }
         
         void OnSelectedReferenceChanged(IEnumerable<int> selectedItems)
@@ -75,13 +79,94 @@ namespace AddrAuditor.Editor
             this.duplications.Clear();
             this.refEntries.Clear();
             
-            foreach (var param in this.analyzeCache.refAssets)
+            // [[explicit assetsが対象] - allEntries]
+            // 1. Built-in sceneに含まれているか
+            var buildProfile = BuildProfile.GetActiveBuildProfile();
+            var builtInScenes = buildProfile?.scenes ?? EditorBuildSettings.scenes;
+            foreach (var scene in builtInScenes)
             {
-                if (param.bundles.Count == 1) // not duplicated
+                if (!scene.enabled)
                     continue;
-                this.duplications.Add(param);
+                
+                var dep = AssetDatabase.GetDependencies(scene.path, true);
+                var dupImplicit = cache.refAssets.Where(
+                    (param) =>
+                    {
+                        // TODO: test
+                        if (param.path.Contains("wake_up"))
+                        {
+                            int hoge = 0;
+                            ++hoge;
+                        }
+                        return dep.Contains(param.path);
+                    }).ToArray();
+                foreach (var dup in dupImplicit)
+                {
+                    this.duplications.Add(new DuplicateAsset()
+                    {
+                        refAssetData = dup,
+                        builtInAsset = scene.path,
+                    });
+                }
             }
-            this.duplications.Sort(CompareName);
+            
+            // 2. Resourcesに含まれているか
+            if (cache != null)
+            {
+                foreach (var param in cache.refAssets)
+                {
+                    if (!param.path.Contains("/Resources/"))
+                        continue;
+                    this.duplications.Add(new DuplicateAsset()
+                    {
+                        refAssetData = param,
+                        builtInAsset = "Resources",
+                    });
+                }
+            }
+            
+            // 3. GraphicsSettings/Always included shader & Preloaded Shaders に含まれているか
+            Debug.LogWarning("3. Always included & Preloaded Shaders");
+            var graphicsSettings = new SerializedObject(UnityEngine.Rendering.GraphicsSettings.GetGraphicsSettings());
+            var alwaysIncludedShaders = graphicsSettings.FindProperty("m_AlwaysIncludedShaders");
+            for (var i = 0; i < alwaysIncludedShaders.arraySize; i++)
+            {
+                // 各シェーダーを取得する
+                var shader = alwaysIncludedShaders.GetArrayElementAtIndex(i).objectReferenceValue as Shader;
+                if (shader != null)
+                {
+                    Debug.Log(shader.name);
+                }
+            }
+
+            // 4. PlayerSettings/Preloaded Assetsに含まれているか
+            Debug.LogWarning("4. Preloaded Assets");
+            var preloadedAssets = PlayerSettings.GetPreloadedAssets();
+            foreach (var asset in preloadedAssets)
+            {
+                Debug.Log(AssetDatabase.GetAssetPath(asset));
+            }
+            
+            // 5. SRP Assets
+            Debug.LogWarning("5. Default SRP Assets");
+            var defaultRPAsset = UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline;
+            var path = AssetDatabase.GetAssetPath(defaultRPAsset);
+            var dependencyPaths = AssetDatabase.GetDependencies(path, true);
+            foreach (var asset in dependencyPaths)
+            {
+                Debug.Log(asset);
+            }
+            
+            // 6. QualitySettings SRP Assets
+            Debug.LogWarning("6. QualitySettings SRP Assets");
+            var buildTargetGroup = BuildPipeline.GetBuildTargetGroup(EditorUserBuildSettings.activeBuildTarget);
+            for (var i = 0; i < QualitySettings.names.Length; i++)
+            {
+                if (!QualitySettings.IsPlatformIncluded(buildTargetGroup.ToString(), i))
+                    continue;
+                var rpAsset = QualitySettings.GetRenderPipelineAssetAt(i);
+                Debug.Log(AssetDatabase.GetAssetPath(rpAsset));
+            }
         }
 
         /// <summary>
@@ -97,10 +182,10 @@ namespace AddrAuditor.Editor
                 {
                     if (!chosenItems.Any())
                         return;
-                    if (chosenItems.First() is RefAssetData refAsset)
+                    if (chosenItems.First() is DuplicateAsset dupAsset)
                     {
                         // focusing in Project Window
-                        var obj = AssetDatabase.LoadMainAssetAtPath(refAsset.path);
+                        var obj = AssetDatabase.LoadMainAssetAtPath(dupAsset.refAssetData.path);
                         Selection.activeObject = obj;
                         EditorGUIUtility.PingObject(obj);
                     }
@@ -117,7 +202,7 @@ namespace AddrAuditor.Editor
                 {
                     var t = this.duplications[index];
                     var label = element.Q<Label>("itemLabel");
-                    label.text = $"   {t.path}";
+                    label.text = $"   {t.builtInAsset} > {t.refAssetData.path}";
                 };
             }
             this.rootElement.Add(this.listView);
@@ -144,6 +229,7 @@ namespace AddrAuditor.Editor
                     var header = new Label("Referencing Entries");
                     header.style.unityFontStyleAndWeight = FontStyle.Bold;
                     box.Add(header);
+                    // TODO
                     this.referenceView = new ListView();
                     {
                         this.referenceView.fixedItemHeight = 25f;
@@ -189,7 +275,6 @@ namespace AddrAuditor.Editor
         /// </summary>
         public override void UpdateView()
         {
-            this.chosenIndex = 0;
             this.listView.ClearSelection();
             this.listView.itemsSource = this.duplications;
             this.listView.Rebuild();

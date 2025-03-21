@@ -320,7 +320,7 @@ namespace AddrAuditor.Editor
                     var groupName = context.Settings.FindGroup(findGroup => findGroup is not null && findGroup.Guid == groupGuid).name;
                     title = $"{groupName}/{title}";
 
-                    //isShaderNode = (this.shaderNode == null && groupName == AddressablesAutoGrouping.SHADER_GROUP_NAME);
+                    //isShaderNode = (this.shaderNode == null && groupName == AddressableAutoGrouping.SHADER_GROUP_NAME);
 
                     // 常駐アセットグループを除外
                     if (!graphSetting.enabledResidentNode)

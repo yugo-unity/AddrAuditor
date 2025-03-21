@@ -77,7 +77,7 @@ namespace AddrAuditor.Editor
         /// <summary>
         /// 解析処理
         /// </summary>
-        public override void Analyze()
+        public override void Analyze(AnalyzeCache cache)
         {
             var settingsPath = $"Assets/{nameof(AddrAutoGroupingSettings)}.asset";
             var groupingSettings = AssetDatabase.LoadAssetAtPath<AddrAutoGroupingSettings>(settingsPath);

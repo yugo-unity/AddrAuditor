@@ -1,25 +1,27 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEditor;
-using UnityEditor.AddressableAssets;
-using UnityEditor.SceneManagement;
-using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
+using UnityEngine.SceneManagement;
+using UnityEditor;
+using UnityEditor.SceneManagement;
 
 namespace AddrAuditor.Editor
 {
-    class MissingAsset
-    {
-        public string assetPath;
-        public string gameObjectPath;
-        public GameObject gameObject;
-    }
-
     /// <summary>
     /// Missingになっているアセット参照の検出
     /// </summary>
     class AnalyzeViewMissingReferences : SubCategoryView
     {
+        static readonly string DETAILS_MESSAGE = "Missingになっているアセット参照をもつComponentを検出します。該当オブジェクトを確認し、適切に処理してください。\n" +
+                                                 "なお、この解析はAddressableに関わらずプロジェクト全体に行われます。";
+        
+        class MissingAsset
+        {
+            public string assetPath;
+            public string gameObjectPath;
+            public GameObject gameObject;
+        }
+
         readonly List<MissingAsset> results = new();
         ListView listView;
         Label detailsLabel; // カテゴリの説明文
@@ -46,9 +48,41 @@ namespace AddrAuditor.Editor
         /// <summary>
         /// 解析処理
         /// </summary>
-        public override void Analyze()
+        public override void Analyze(AnalyzeCache cache)
         {
-            CollectMissingAssets(this.results);
+            this.results.Clear();
+            var paths = AssetDatabase.GetAllAssetPaths();
+            foreach (var path in paths)
+            {
+                if (path.Contains("Packages"))
+                    continue;
+                var o = AssetDatabase.LoadMainAssetAtPath(path);
+                switch (o)
+                {
+                    case GameObject go:
+                        DigMissingComponents(results, path, go.name, go);
+                        break;
+                    case SceneAsset:
+                    {
+                        var needToUnload = false;
+                        var scene = SceneManager.GetActiveScene();
+                        if (scene.path != path)
+                        {
+                            needToUnload = true;
+                            scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Additive);
+                        }
+                        if (scene.IsValid())
+                        {
+                            var gameObjects = scene.GetRootGameObjects();
+                            foreach (var go in gameObjects)
+                                DigMissingComponents(results, path, go.name, go);   
+                        }
+                        if (needToUnload)
+                            EditorSceneManager.CloseScene(scene, true);
+                        break;
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -62,8 +96,7 @@ namespace AddrAuditor.Editor
             box.Add(header);
             this.detailsLabel = new Label("explain what is setting");
             this.detailsLabel.style.whiteSpace = WhiteSpace.Normal;
-            this.detailsLabel.text = "Missingになっているアセット参照をもつComponentを検出します。\n" +
-                                     "該当オブジェクトを確認し、適切に処理してください";
+            this.detailsLabel.text = DETAILS_MESSAGE;
             box.Add(this.detailsLabel);
             foreach (var child in box.Children())
                 child.style.left = 10f;
@@ -107,47 +140,6 @@ namespace AddrAuditor.Editor
             this.listView.ClearSelection();
             this.listView.itemsSource = labels;
             this.listView.Rebuild();
-        }
-
-        /// <summary>
-        /// 対象アセットの取得
-        /// </summary>
-        static void CollectMissingAssets(List<MissingAsset> results)
-        {
-            results.Clear();
-            
-            var paths = AssetDatabase.GetAllAssetPaths();
-            foreach (var path in paths)
-            {
-                if (path.Contains("Packages"))
-                    continue;
-                var o = AssetDatabase.LoadMainAssetAtPath(path);
-                switch (o)
-                {
-                    case GameObject go:
-                        DigMissingComponents(results, path, go.name, go);
-                        break;
-                    case SceneAsset:
-                    {
-                        var needToUnload = false;
-                        var scene = SceneManager.GetActiveScene();
-                        if (scene.path != path)
-                        {
-                            needToUnload = true;
-                            scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Additive);
-                        }
-                        if (scene.IsValid())
-                        {
-                            var gameObjects = scene.GetRootGameObjects();
-                            foreach (var go in gameObjects)
-                                DigMissingComponents(results, path, go.name, go);   
-                        }
-                        if (needToUnload)
-                            EditorSceneManager.CloseScene(scene, true);
-                        break;
-                    }
-                }
-            }
         }
 
         /// <summary>

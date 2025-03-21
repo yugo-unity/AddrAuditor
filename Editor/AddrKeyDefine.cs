@@ -6,13 +6,13 @@ using System.IO;
 using System.Collections.Generic;
 
 /// <summary>
-/// Addressablesをロードする際のKey定義を事前に行う
+/// Addressableをロードする際のKey定義を事前に行う
 /// メリット ... typoの防止、GUIDに統一することでのcatalogサイズの削減、意図しない同一address名の発見
 /// デメリット ... エントリを追加する度に行う必要がある
 /// 
 /// NOTE:
 /// 本スクリプトではaddressのユニークを保証されていないとエラーになる
-/// Addressablesでは同一アドレスを許容しているがリモートのbundle切り替えの為なのでローカルでは許容しない
+/// Addressableでは同一アドレスを許容しているがリモートのbundle切り替えの為なのでローカルでは許容しない
 /// リモートアセットについてはKey値をハードコーディングするのは良くない
 /// よって本スクリプトはローカルのみを考慮し、型とアドレスが共に同一のエントリがある場合はコンパイルエラーとなる、で正しい
 /// </summary>
@@ -30,7 +30,7 @@ namespace AddrAuditor.Editor
 		}
 
 		/// <summary>
-		/// create define file about Addressables Keys
+		/// create define file about Addressable Keys
 		/// </summary>
 		static void CreateAddressDefines()
 		{

@@ -1,8 +1,10 @@
-using System.Collections.Generic;
 using System.Linq;
-using UnityEditor;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
+using UnityEditor;
+using UnityEditor.AddressableAssets;
+using UnityEditor.AddressableAssets.Settings;
 
 namespace AddrAuditor.Editor
 {
@@ -16,32 +18,34 @@ namespace AddrAuditor.Editor
             BUILT_IN_ASSETS,
             UNUSED_PROP,
             MISSING_REF,
+            
+            MAX,
         }
-
-        static readonly List<string> MAIN_CATEGORIES = new ()
+        static readonly string[] MAIN_CATEGORIES = new string[(int)ANALYZE.MAX]
         {
-            "   Addressables Asset Settings",
-            "   Addressables Group Settings",
-            "   Duplicated Assets",
-            "   Built-in Assets",
-            "   Unused Material Properties",
-            "   Missing Asset References",
+            "   Addressable Asset Settings",
+            "   Addressable Group Settings",
+            "   Duplicated Assets in Addressable",
+            "   Duplicated Assets in Built-in Assets",
+            "   Unused Material Properties in Project",
+            "   Missing Asset References in Project",
         };
         
-        SubCategoryView[] subCategories;
+        SubCategoryView[] subCategories = new SubCategoryView[MAIN_CATEGORIES.Length];
         TwoPaneSplitView mainSplitView;
         VisualElement rightPane;
         int currentCategory;
+        AnalyzeCache analyzeCache;
         
         /// <summary>
-        /// Window初回構築
+        /// Build Editor-Window
         /// </summary>
         void CreateGUI()
         {
-            this.subCategories = new SubCategoryView[MAIN_CATEGORIES.Count];
-            this.mainSplitView = new TwoPaneSplitView(0, 200, TwoPaneSplitViewOrientation.Horizontal);
-         
-            var root = this.rootVisualElement;   
+            AddrUtility.ReloadInternalAPI();
+            
+            var root = this.rootVisualElement;
+            
             var header = new Box();
             {
                 var colorElement = 0.24f;
@@ -49,82 +53,117 @@ namespace AddrAuditor.Editor
                 header.style.height = 32f;
                 header.style.borderBottomWidth = 1;
                 header.style.borderBottomColor = Color.black;
-            }
-            var analyzeButton = new Button();
-            {
-                //analyzeButton.name = "itemButton";
-                analyzeButton.text = "Analyze";
-                analyzeButton.style.alignSelf = Align.FlexEnd;
-                analyzeButton.style.width = 100f;
-                analyzeButton.style.height = 25f;
-                analyzeButton.clicked += () =>
+                header.style.flexDirection = FlexDirection.Row;
+
+                var analyzeButton = new Button();
                 {
-                    foreach (var view in this.subCategories)
-                        view.Analyze();
-
-                    this.subCategories[this.currentCategory].UpdateView();
-                };
+                    analyzeButton.text = "Analyze";
+                    analyzeButton.style.width = 100f;
+                    analyzeButton.style.height = 25f;
+                    analyzeButton.clicked += () =>
+                    {
+                        var subView = this.subCategories[this.currentCategory];
+                        if (subView.requireAnalyzeCache)
+                            this.CreateAnalyzeCache();
+                        subView.Analyze(this.analyzeCache);
+                        subView.UpdateView();
+                    };
+                }
+                header.Add(analyzeButton);
+                var analyzeAllButton = new Button();
+                {
+                    analyzeAllButton.text = "Analyze All";
+                    analyzeAllButton.style.width = 100f;
+                    analyzeAllButton.style.height = 25f;
+                    analyzeAllButton.clicked += () =>
+                    {
+                        this.CreateAnalyzeCache();
+                        foreach (var view in this.subCategories)
+                            view.Analyze(this.analyzeCache);
+                        this.subCategories[this.currentCategory].UpdateView();
+                    };
+                }
+                header.Add(analyzeAllButton);
             }
-            header.Add(analyzeButton);
             root.Add(header);
-            
-            // 左側のカテゴリリスト
-            var categories = new ListView(MAIN_CATEGORIES);
-            categories.makeItem = () => 
-            {
-                var label = new Label();
-                label.style.unityTextAlign = TextAnchor.MiddleLeft;
-                return label;
-            };
-            categories.bindItem = (element, index) =>
-            {
-                if (element is Label label)
-                    label.text = MAIN_CATEGORIES[index];
-            };
-            categories.Rebuild();
-            categories.selectedIndex = 0;
-            categories.selectedIndicesChanged += (selectedItems) =>
-            {
-                // メインカテゴリが変更された際のLeftPaneの再構築
-                var index = selectedItems.First();
-                this.UpdateSubView(index);
-            };
-            this.mainSplitView.Add(categories);
-            
-            // 右側のView生成
-            this.subCategories[(int)ANALYZE.ASSET_SETTINGS] = CreateSubView<AnalyzeViewAddrSetting>(true);
-            this.subCategories[(int)ANALYZE.GROUP_SETTINGS] = CreateSubView<AnalyzeViewGroupSetting>(true);
-            this.subCategories[(int)ANALYZE.DUPLICATED_ASSETS] = CreateSubView<AnalyzeViewDuplicatedAssets>(true);
-            this.subCategories[(int)ANALYZE.BUILT_IN_ASSETS] = CreateSubView<AnalyzeViewGroupSetting>(false); // TODO
-            this.subCategories[(int)ANALYZE.UNUSED_PROP] = CreateSubView<AnalyzeViewUnusedMaterialProp>(false);
-            this.subCategories[(int)ANALYZE.MISSING_REF] = CreateSubView<AnalyzeViewMissingReferences>(false);
 
-            // NOTE: TwoPaneSplitViewは初回だけRightPaneの挙動が違う
-            //       おそらく動的にPaneを再構築するのを想定してない
-            this.rightPane = new Box();
-            this.mainSplitView.Add(this.rightPane);
-            this.UpdateSubView(0);
-            
+            this.mainSplitView = new TwoPaneSplitView(0, 240, TwoPaneSplitViewOrientation.Horizontal);
+            {
+                var categories = new ListView(MAIN_CATEGORIES);
+                {
+                    categories.makeItem = () =>
+                    {
+                        var label = new Label();
+                        label.style.unityTextAlign = TextAnchor.MiddleLeft;
+                        return label;
+                    };
+                    categories.bindItem = (element, index) =>
+                    {
+                        if (element is Label label)
+                            label.text = MAIN_CATEGORIES[index];
+                    };
+                    categories.selectedIndex = 0;
+                    categories.selectedIndicesChanged += (selectedItems) =>
+                    {
+                        var index = selectedItems.First();
+                        this.UpdateSubView(index);
+                    };
+                }
+                this.mainSplitView.Add(categories);
+
+                this.subCategories[(int)ANALYZE.ASSET_SETTINGS] = CreateSubView<AnalyzeViewAddrSetting>(true);
+                this.subCategories[(int)ANALYZE.GROUP_SETTINGS] = CreateSubView<AnalyzeViewGroupSetting>(true);
+                this.subCategories[(int)ANALYZE.DUPLICATED_ASSETS] = CreateSubView<AnalyzeViewDuplicatedAssets>(true);
+                this.subCategories[(int)ANALYZE.BUILT_IN_ASSETS] = CreateSubView<AnalyzeViewBuiltInAssets>(true);
+                this.subCategories[(int)ANALYZE.UNUSED_PROP] = CreateSubView<AnalyzeViewUnusedMaterialProp>(false);
+                this.subCategories[(int)ANALYZE.MISSING_REF] = CreateSubView<AnalyzeViewMissingReferences>(false);
+
+                // NOTE: TwoPaneSplitViewは初回だけRightPaneの挙動が違う
+                //       おそらく動的にPaneを再構築するのを想定してない
+                this.rightPane = new Box();
+                this.mainSplitView.Add(this.rightPane);
+            }
             root.Add(this.mainSplitView);
+
+            this.UpdateSubView(0);
         }
 
         /// <summary>
-        /// RightPaneの再構築
+        /// create cache to be used multiple categories
         /// </summary>
-        /// <param name="index"></param>
-        void UpdateSubView(int index)
+        void CreateAnalyzeCache()
         {
-            this.currentCategory = index;
-            this.subCategories[index].UpdateView();
+            var setting = AddressableAssetSettingsDefaultObject.Settings;
+            var (refAssets, spAtlases) = AddrAutoGrouping.CollectReferencedAssetInfo(setting, null, false);
+            var entries = new List<AddressableAssetEntry>();
+            foreach (var t in setting.groups)
+                entries.AddRange(t.entries);
+            this.analyzeCache = new AnalyzeCache()
+            {
+                //addrSetting = setting,
+                refAssets = refAssets,
+                explicitEntries = entries,
+                spriteAtlases = spAtlases,
+            };
+        }
+
+        /// <summary>
+        /// update selected info 
+        /// </summary>
+        /// <param name="categoryIndex">index for category what you want to display</param>
+        void UpdateSubView(int categoryIndex)
+        {
+            this.currentCategory = categoryIndex;
+            this.subCategories[categoryIndex].UpdateView();
             this.rightPane.Clear();
-            this.rightPane.Add(this.subCategories[index].rootElement);
+            this.rightPane.Add(this.subCategories[categoryIndex].rootElement);
         }
         
         /// <summary>
-        /// RightPaneの共通生成処理
+        /// create instances for any category's info
         /// </summary>
-        /// <typeparam name="T">SubCategory固有のクラス</typeparam>
-        /// <returns>SubCategory管理クラス</returns>
+        /// <typeparam name="T">SubCategory class</typeparam>
+        /// <returns>SubCategory instance</returns>
         static T CreateSubView<T>(bool splitThree) where T : SubCategoryView, new()
         {
             var view = new T();

@@ -102,7 +102,7 @@ namespace AddrAuditor.Editor
     }
 
     /// <summary>
-    /// Addressablesで自動解決した依存関係をノードグラフで確認する
+    /// Addressableで自動解決した依存関係をノードグラフで確認する
     /// </summary>
     internal class AddrDependenciesGraph : EditorWindow
     {
@@ -220,7 +220,7 @@ namespace AddrAuditor.Editor
             // Clear Analysis Button
             {
                 var button = AddrUtility.CreateButton(this.primaryBox,
-                    "Clear Addressables Analysis",
+                    "Clear Addressable Analysis",
                     "設定やエントリが更新された際にキャッシュをクリアしてください。\n\n" +
                     "You should clear the cache if settings or entries are updated.");
                 button.clicked += () =>

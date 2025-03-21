@@ -75,9 +75,9 @@ namespace AddrAuditor.Editor
 
         static void UtilityButtons(VisualElement root, AddressableAssetSettings settings)
         {
-            var button = AddrUtility.CreateButton(root, "Open and Sort Addressables Groups",
-                "Addressables Group Windowを開きます。\n\n" +
-                "Open Addressables window, just as shortcut.");
+            var button = AddrUtility.CreateButton(root, "Open and Sort Addressable Groups",
+                "Addressable Group Windowを開きます。\n\n" +
+                "Open Addressable window, just as shortcut.");
             button.style.width = SINGLE_BUTTON_WIDTH;
             button.style.alignSelf = new StyleEnum<Align>(Align.Center);
             button.clicked += () =>
@@ -104,7 +104,7 @@ namespace AddrAuditor.Editor
             
             button = AddrUtility.CreateButton(root, "Analyze & Suggest any settings",
                 "プロジェクトを解析して設定の提案を行います。\n\n" +
-                "Analyze Addressables settings and Suggest better one for console.");
+                "Analyze Addressable settings and Suggest better one for console.");
             button.style.width = SINGLE_BUTTON_WIDTH;
             button.style.alignSelf = new StyleEnum<Align>(Align.Center);
             button.clicked += () =>
@@ -261,7 +261,7 @@ namespace AddrAuditor.Editor
             toggle.RegisterValueChangedCallback((evt) =>
             {
                 groupingSettings.useLocalProvider = evt.newValue;
-                // NOTE: all groups are updated if AddressablesAssetSettings is updated
+                // NOTE: all groups are updated if AddressableAssetSettings is updated
                 if (groupingSettings.useLocalProvider)
                 {
                     settings.BundledAssetProviderType = new SerializedType() { Value = typeof(LocalBundledAssetProvider) };
@@ -277,9 +277,9 @@ namespace AddrAuditor.Editor
             });
             
             toggle = AddrUtility.CreateToggle(box, "Optimized Build (for local bundles)",
-                "ローカル用に最適化したAddressablesビルドを行います。\n" +
+                "ローカル用に最適化したAddressableビルドを行います。\n" +
                 "リモートコンテンツを扱う場合、またはEditorでのAssetBundleの挙動を確認する場合は使用しないでください。\n\n" +
-                "Build Addressables with optimization for local bundles.\n" +
+                "Build Addressable with optimization for local bundles.\n" +
                 "Do not use if you have remote contents or verify bundle work on Editor.",
                 groupingSettings.useLocalBuild);
             toggle.RegisterValueChangedCallback((evt) =>
@@ -289,15 +289,15 @@ namespace AddrAuditor.Editor
             
             toggle = AddrUtility.CreateToggle(box, "Clear Build Cache",
                 "Build Cacheを消去します。\n\n" +
-                "Clear all build cache before building Addressables.", groupingSettings.clearBuildCache);
+                "Clear all build cache before building Addressable.", groupingSettings.clearBuildCache);
             toggle.RegisterValueChangedCallback((evt) =>
             {
                 groupingSettings.clearBuildCache = evt.newValue;
             });
 
-            var button = AddrUtility.CreateButton(box, "Addressables Build",
-                "Addressablesビルドを行います。\n\n" +
-                "Build Addressables defaults. Please use this if you want to confirm on Editor.");            
+            var button = AddrUtility.CreateButton(box, "Addressable Build",
+                "Addressableビルドを行います。\n\n" +
+                "Build Addressable defaults. Please use this if you want to confirm on Editor.");            
             button.style.width = SINGLE_BUTTON_WIDTH;
             button.style.alignSelf = new StyleEnum<Align>(Align.Center);
             button.clicked += () =>

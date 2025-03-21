@@ -160,8 +160,7 @@ namespace AddrAuditor.Editor
                 if (!progressDisplayed || groupIndex % updateFrequency == 0)
                 {
                     progressDisplayed = true;
-                    if (EditorUtility.DisplayCancelableProgressBar("Calculating Input Definitions", "",
-                            (float)groupIndex / settings.groups.Count))
+                    if (EditorUtility.DisplayCancelableProgressBar("Calculating Input Definitions", "", (float)groupIndex / settings.groups.Count))
                     {
                         bundleToAssetGroup.Clear();
                         allBundleInputDefs.Clear();
@@ -251,7 +250,7 @@ namespace AddrAuditor.Editor
         public static string defaultGroupGuid = "";
 
         /// <summary>
-        /// Addressables Groupのalphanumericソート
+        /// Addressable Groupのalphanumericソート
         /// </summary>
         public static int CompareGroup(AddressableAssetGroup a, AddressableAssetGroup b)
         {
@@ -291,7 +290,7 @@ namespace AddrAuditor.Editor
             return ret;
         }
         /// <summary>
-        /// Addressables Groupのalphanumericソート
+        /// Addressable Groupのalphanumericソート
         /// </summary>
         public static int CompareGroup(string a, string b)
         {

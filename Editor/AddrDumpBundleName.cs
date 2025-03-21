@@ -10,7 +10,7 @@ namespace AddrAuditor.Editor
     internal partial class AddrAuditor
     {
         /// <summary>
-        /// AddressablesのbundleのHashとグループ名のダンプ
+        /// AddressableのbundleのHashとグループ名のダンプ
         /// MemoryProfilerではHash名しかでないので照合用
         /// </summary>
         static void DumpBundleName()

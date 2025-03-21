@@ -1,24 +1,29 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEditor;
 using UnityEngine.UIElements;
+using UnityEditor;
 
 namespace AddrAuditor.Editor
 {
-    class UnusedProp
-    {
-        public string assetPath;
-        public Material material;
-        public SerializedProperty sp;
-        public string propName;
-        public int propIndex;
-    }
-
     /// <summary>
     /// 使用されていないMaterialPropertyの検出
     /// </summary>
     class AnalyzeViewUnusedMaterialProp : SubCategoryView
     {
+        static readonly string DETAILS_MESSAGE = "Materialに含まれる未使用のPropertyを検出します。MaterialのShaderを変更した際、" +
+                                                 "変更前に使用されていたPropertyは自動で削除されません。\n" +
+                                                 "ランタイムでShaderを切り替えるようなケースがない限り削除した方がベターです。\n" +
+                                                 "なお、この解析はAddressableに関わらずプロジェクト全体に行われます。";
+        
+        class UnusedProp
+        {
+            public string assetPath;
+            public Material material;
+            public SerializedProperty sp;
+            public string propName;
+            public int propIndex;
+        }
+
         readonly List<UnusedProp> unusedProps = new();
         ListView listView;
         Label detailsLabel; // カテゴリの説明文
@@ -45,9 +50,64 @@ namespace AddrAuditor.Editor
         /// <summary>
         /// 解析処理
         /// </summary>
-        public override void Analyze()
+        public override void Analyze(AnalyzeCache cache)
         {
-            DigMissingComponents(this.unusedProps);
+            this.unusedProps.Clear();
+            //var guids = AssetDatabase.FindAssets("t:Material"); // include Packages
+            var serachFolder = new string[] { "Assets", };
+            var guids = AssetDatabase.FindAssets("t:Material", serachFolder);
+
+            foreach (var guid in guids)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+                if (m == null || m.shader == null)
+                    continue;
+
+                var properties = new HashSet<string>();
+                var count = ShaderUtil.GetPropertyCount(m.shader);
+                for (var i = 0; i < count; i++)
+                {
+                    var propName = ShaderUtil.GetPropertyName(m.shader, i);
+                    properties.Add(propName);
+                }
+
+                var so = new SerializedObject(m);
+                var sp = so.FindProperty("m_SavedProperties");
+
+                var texEnvSp = sp.FindPropertyRelative("m_TexEnvs");
+                for (var i = texEnvSp.arraySize - 1; i >= 0; i--)
+                {
+                    var propName = texEnvSp.GetArrayElementAtIndex(i).FindPropertyRelative("first").stringValue;
+
+                    if (!properties.Contains(propName))
+                        AddUnusedList(this.unusedProps, path, m, texEnvSp, i, propName);
+                }
+
+                var floatsSp = sp.FindPropertyRelative("m_Floats");
+                for (var i = floatsSp.arraySize - 1; i >= 0; i--)
+                {
+                    var propName = floatsSp.GetArrayElementAtIndex(i).FindPropertyRelative("first").stringValue;
+                    if (!properties.Contains(propName))
+                        AddUnusedList(this.unusedProps, path, m, floatsSp, i, propName);
+                }
+
+                var intSp = sp.FindPropertyRelative("m_Ints");
+                for (var i = intSp.arraySize - 1; i >= 0; i--)
+                {
+                    var propName = intSp.GetArrayElementAtIndex(i).FindPropertyRelative("first").stringValue;
+                    if (!properties.Contains(propName))
+                        AddUnusedList(this.unusedProps, path, m, intSp, i, propName);
+                }
+
+                var colorsSp = sp.FindPropertyRelative("m_Colors");
+                for (var i = colorsSp.arraySize - 1; i >= 0; i--)
+                {
+                    var propName = colorsSp.GetArrayElementAtIndex(i).FindPropertyRelative("first").stringValue;
+                    if (!properties.Contains(propName))
+                        AddUnusedList(this.unusedProps, path, m, colorsSp, i, propName);
+                }
+            }
         }
 
         /// <summary>
@@ -61,9 +121,7 @@ namespace AddrAuditor.Editor
             box.Add(header);
             this.detailsLabel = new Label("explain what is setting");
             this.detailsLabel.style.whiteSpace = WhiteSpace.Normal;
-            this.detailsLabel.text = "Materialに含まれる未使用のPropertyを検出します。\n" +
-                                     "MaterialのShaderを変更した際、変更前に使用されていたPropertyは自動で削除されません。\n" +
-                                     "ランタイムでShaderを切り替えるようなケースがない限り削除した方がベターです。";
+            this.detailsLabel.text = DETAILS_MESSAGE;
             box.Add(this.detailsLabel);
             foreach (var child in box.Children())
                 child.style.left = 10f;
@@ -117,67 +175,6 @@ namespace AddrAuditor.Editor
             this.listView.itemsSource = this.unusedProps;
             this.listView.ClearSelection();
             this.listView.Rebuild();
-        }
-
-        static void DigMissingComponents(List<UnusedProp> results)
-        {
-            results.Clear();
-            
-            //var guids = AssetDatabase.FindAssets("t:Material"); // include Packages
-            var serachFolder = new string[] { "Assets", };
-            var guids = AssetDatabase.FindAssets("t:Material", serachFolder);
-
-            foreach (var guid in guids)
-            {
-                var path = AssetDatabase.GUIDToAssetPath(guid);
-                var m = AssetDatabase.LoadAssetAtPath<Material>(path);
-                if (m == null || m.shader == null)
-                    continue;
-
-                var properties = new HashSet<string>();
-                var count = ShaderUtil.GetPropertyCount(m.shader);
-                for (var i = 0; i < count; i++)
-                {
-                    var propName = ShaderUtil.GetPropertyName(m.shader, i);
-                    properties.Add(propName);
-                }
-
-                var so = new SerializedObject(m);
-                var sp = so.FindProperty("m_SavedProperties");
-
-                var texEnvSp = sp.FindPropertyRelative("m_TexEnvs");
-                for (var i = texEnvSp.arraySize - 1; i >= 0; i--)
-                {
-                    var propName = texEnvSp.GetArrayElementAtIndex(i).FindPropertyRelative("first").stringValue;
-
-                    if (!properties.Contains(propName))
-                        AddUnusedList(results, path, m, texEnvSp, i, propName);
-                }
-
-                var floatsSp = sp.FindPropertyRelative("m_Floats");
-                for (var i = floatsSp.arraySize - 1; i >= 0; i--)
-                {
-                    var propName = floatsSp.GetArrayElementAtIndex(i).FindPropertyRelative("first").stringValue;
-                    if (!properties.Contains(propName))
-                        AddUnusedList(results, path, m, floatsSp, i, propName);
-                }
-
-                var intSp = sp.FindPropertyRelative("m_Ints");
-                for (var i = intSp.arraySize - 1; i >= 0; i--)
-                {
-                    var propName = intSp.GetArrayElementAtIndex(i).FindPropertyRelative("first").stringValue;
-                    if (!properties.Contains(propName))
-                        AddUnusedList(results, path, m, intSp, i, propName);
-                }
-
-                var colorsSp = sp.FindPropertyRelative("m_Colors");
-                for (var i = colorsSp.arraySize - 1; i >= 0; i--)
-                {
-                    var propName = colorsSp.GetArrayElementAtIndex(i).FindPropertyRelative("first").stringValue;
-                    if (!properties.Contains(propName))
-                        AddUnusedList(results, path, m, colorsSp, i, propName);
-                }
-            }
         }
 
         /// <summary>
