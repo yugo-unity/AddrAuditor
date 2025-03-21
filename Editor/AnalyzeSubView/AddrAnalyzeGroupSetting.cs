@@ -5,7 +5,7 @@ using UnityEngine.UIElements;
 
 namespace AddrAuditor.Editor
 {
-    class AnalyzeViewGroupSetting : SubCategoryView
+    class AnalyzeViewGroupSetting : ResultView
     {
         static readonly List<string> AG_CATEGORIES = new()
         {

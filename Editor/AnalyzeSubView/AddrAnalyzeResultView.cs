@@ -8,7 +8,7 @@ namespace AddrAuditor.Editor
 {
     internal class AnalyzeCache
     {
-        //public AddressableAssetSettings addrSetting;
+        public AddressableAssetSettings addrSetting;
         public List<RefAssetData> refAssets;
         public List<AddressableAssetEntry> explicitEntries;
         public List<SpriteAtlasData> spriteAtlases;
@@ -21,9 +21,9 @@ namespace AddrAuditor.Editor
     }
 
     /// <summary>
-    /// Subカテゴリインスタンス
+    /// view to display result of analytics
     /// </summary>
-    internal abstract class SubCategoryView
+    internal abstract class ResultView
     {
         public VisualElement rootElement { get; private set; }
         public virtual bool requireAnalyzeCache => false;
@@ -34,33 +34,48 @@ namespace AddrAuditor.Editor
             var root = new TwoPaneSplitView(0, dimension, orientation);
             this.rootElement = root;
             this.OnCreateView();
-            this.UpdateView(); // 初回更新
+            this.UpdateView();
         }
-
+        
         /// <summary>
-        /// 解析処理
+        /// called when require to analyze
         /// </summary>
+        /// <param name="cache">build cache that created by AddrAnalyzeWindow</param>
         public abstract void Analyze(AnalyzeCache cache);
 
         /// <summary>
-        /// 固有Viewの生成
+        /// called when created view (only once)
         /// </summary>
-        /// <returns>AnalyzeCacheの要求</returns>
         protected abstract void OnCreateView();
 
         /// <summary>
-        /// 表示の更新
-        /// カテゴリが選択された時に呼ばれる
+        /// called when selecting any category
         /// </summary>
         public abstract void UpdateView();
 
         /// <summary>
-        /// 
+        /// get the duplicated assets what is referenced 2+
         /// </summary>
-        /// <param name="refEntries"></param>
-        /// <param name="allEntries"></param>
-        /// <param name="refAsset"></param>
-        protected static void FindReferencedEntries(List<RefEntry> refEntries, AnalyzeCache analyzeCache, RefAssetData refAsset)
+        /// <param name="ret">result</param>
+        /// <param name="analyzeCache">Addressable build cache</param>
+        protected static void FindDuplicatedAssets(List<RefAssetData> ret, AnalyzeCache analyzeCache)
+        {
+            foreach (var param in analyzeCache.refAssets)
+            {
+                if (param.bundles.Count == 1) // not duplicated
+                    continue;
+                ret.Add(param);
+            }
+            ret.Sort(CompareName);
+        }
+
+        /// <summary>
+        /// get the referencing entries what is referencing a specific explicit/implicit asset  
+        /// </summary>
+        /// <param name="ret">result</param>
+        /// <param name="analyzeCache">Addressable build cache</param>
+        /// <param name="refAsset">explicit/implicit asset</param>
+        protected static void FindReferencedEntries(List<RefEntry> ret, AnalyzeCache analyzeCache, RefAssetData refAsset)
         {
             var refAssetPath = refAsset.path;
             var isSpriteInAtlas = refAsset.usedSubAssetTypes.Contains(typeof(Sprite)) && refAsset.usedSubAssetTypes.Count == 1;
@@ -68,10 +83,8 @@ namespace AddrAuditor.Editor
             if (isSpriteInAtlas)
             {
                 var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(refAsset.path);
-                //var packed = false;
                 foreach (var atlas in analyzeCache.spriteAtlases)
                 {
-                    // AFAIK no way to find SpriteAtlas contains a Sprite before instancing
                     if (atlas.instance.CanBindTo(sprite))
                     {
                         refAssetPath = AssetDatabase.GetAssetPath(atlas.instance);
@@ -80,7 +93,7 @@ namespace AddrAuditor.Editor
                 }
             }
 
-            refEntries.Clear();
+            ret.Clear();
             var entryCount = analyzeCache.explicitEntries.Count;
             for (var i = 0; i < entryCount; ++i)
             {
@@ -93,7 +106,7 @@ namespace AddrAuditor.Editor
                 {
                     if (depPath != refAssetPath)
                         continue;
-                    refEntries.Add(new RefEntry()
+                    ret.Add(new RefEntry()
                     {
                         groupPath = entry.parentGroup.name,
                         assetPath = entry.AssetPath,
@@ -103,14 +116,14 @@ namespace AddrAuditor.Editor
             }
             EditorUtility.ClearProgressBar();
 
-            if (refEntries.Count == 0)
+            if (ret.Count == 0)
             {
                 if (isSpriteInAtlas)
                 {
                     // SpriteAtlasが重複しているがSpriteAtlasがEntryにないケースは暗黙アセットであるSpriteAtlasを警告する
                     // 暗黙アセットであるSpriteAtlasを参照しているEntryを検出すると、
                     // プロジェクトによっては多数リストアップされ、本質的に何が重複アセットなのかわからなくなる懸念がある
-                    refEntries.Add(new RefEntry()
+                    ret.Add(new RefEntry()
                     {
                         groupPath = null,
                         assetPath = refAssetPath,
@@ -121,16 +134,14 @@ namespace AddrAuditor.Editor
                     Debug.LogError($"Unknown error, not found referenced AddressableEntry {refAsset.path}");
                 }
             }
+            
+            ret.Sort(CompareName);
         }
         
+        // sort by alphanumeric
         static readonly System.Text.RegularExpressions.Regex NUM_REGEX = new (@"[^0-9]");
-        /// <summary>
-        /// alphanumericソート
-        /// </summary>
-        protected static int CompareName(RefAssetData aParam, RefAssetData bParam)
+        static int CompareName(string a, string b)
         {
-            var a = aParam.path;
-            var b = bParam.path;
             var ret = string.CompareOrdinal(a, b);
             // 桁数の違う数字を揃える
             var regA = NUM_REGEX.Replace(a, string.Empty);
@@ -145,5 +156,7 @@ namespace AddrAuditor.Editor
 
             return ret;
         }
+        static int CompareName(RefAssetData a, RefAssetData b) => CompareName(a.path, b.path);
+        static int CompareName(RefEntry a, RefEntry b) => CompareName(a.assetPath, b.assetPath);
     }
 }

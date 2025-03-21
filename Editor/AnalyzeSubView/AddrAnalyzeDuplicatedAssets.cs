@@ -7,9 +7,9 @@ using UnityEditor;
 namespace AddrAuditor.Editor
 {
     /// <summary>
-    /// 重複しているアセットの検出
+    /// view for duplicated asset in Addressable
     /// </summary>
-    class AnalyzeViewDuplicatedAssets : SubCategoryView
+    class AnalyzeViewDuplicatedAssets : ResultView
     {
         static readonly string DETAILS_MESSAGE = "重複してAssetBundleに含まれているアセットを検出します。\n" +
                                                  "適切にグループを設定するかAutoGrouping機能を利用して解決してください。\n" +
@@ -24,16 +24,15 @@ namespace AddrAuditor.Editor
         VisualElement optionalView;
         Label detailsLabel;
         ListView referenceView;
-        int chosenIndex;
         
         /// <summary>
         /// Callback when any column is selected
         /// </summary>
         void OnSelectedChanged(IEnumerable<int> selectedItems)
         {
-            if (!selectedItems.Any())
+            if (selectedItems is not List<int> indexList || indexList.Count == 0)
                 return;
-            var index = selectedItems.First();
+            var index = indexList[0];
             var dup = this.duplications[index];
             if (string.IsNullOrEmpty(dup.path))
                 return;
@@ -47,8 +46,6 @@ namespace AddrAuditor.Editor
             this.referenceView.ClearSelection();
             this.referenceView.itemsSource = this.refEntries;
             this.referenceView.Rebuild();
-
-            this.chosenIndex = index;
         }
         
         void OnSelectedReferenceChanged(IEnumerable<int> selectedItems)
@@ -60,32 +57,24 @@ namespace AddrAuditor.Editor
             if (string.IsNullOrEmpty(dup.assetPath))
                 return;
             
-            // // focusing in Project Window
-            // var obj = AssetDatabase.LoadMainAssetAtPath(this.refEntries[index].assetPath);
-            // Selection.activeObject = obj;
-            // EditorGUIUtility.PingObject(obj);
+            // focusing in Project Window
+            var obj = AssetDatabase.LoadMainAssetAtPath(this.refEntries[index].assetPath);
+            Selection.activeObject = obj;
+            EditorGUIUtility.PingObject(obj);
         }
 
         /// <summary>
-        /// 解析処理
+        /// called when require to analyze
         /// </summary>
+        /// <param name="cache">build cache that created by AddrAnalyzeWindow</param>
         public override void Analyze(AnalyzeCache cache)
         {
             this.analyzeCache = cache;
-            this.duplications.Clear();
-            this.refEntries.Clear();
-            
-            foreach (var param in this.analyzeCache.refAssets)
-            {
-                if (param.bundles.Count == 1) // not duplicated
-                    continue;
-                this.duplications.Add(param);
-            }
-            this.duplications.Sort(CompareName);
+            FindDuplicatedAssets(this.duplications, cache);
         }
 
         /// <summary>
-        /// GUI構築
+        /// called when created view (only once)
         /// </summary>
         protected override void OnCreateView()
         {
@@ -184,12 +173,10 @@ namespace AddrAuditor.Editor
         }
 
         /// <summary>
-        /// 表示の更新
-        /// カテゴリが選択された時に呼ばれる
+        /// called when selecting any category
         /// </summary>
         public override void UpdateView()
         {
-            this.chosenIndex = 0;
             this.listView.ClearSelection();
             this.listView.itemsSource = this.duplications;
             this.listView.Rebuild();

@@ -8,6 +8,9 @@ using UnityEditor.AddressableAssets.Settings;
 
 namespace AddrAuditor.Editor
 {
+    /// <summary>
+    /// Analyze references for Addressable
+    /// </summary>
     internal class AddrAnalyzeWindow : EditorWindow
     {
         enum ANALYZE
@@ -31,7 +34,7 @@ namespace AddrAuditor.Editor
             "   Missing Asset References in Project",
         };
         
-        SubCategoryView[] subCategories = new SubCategoryView[MAIN_CATEGORIES.Length];
+        ResultView[] subCategories = new ResultView[MAIN_CATEGORIES.Length];
         TwoPaneSplitView mainSplitView;
         VisualElement rightPane;
         int currentCategory;
@@ -63,8 +66,7 @@ namespace AddrAuditor.Editor
                     analyzeButton.clicked += () =>
                     {
                         var subView = this.subCategories[this.currentCategory];
-                        if (subView.requireAnalyzeCache)
-                            this.CreateAnalyzeCache();
+                        this.CreateAnalyzeCache(subView.requireAnalyzeCache);
                         subView.Analyze(this.analyzeCache);
                         subView.UpdateView();
                     };
@@ -77,7 +79,7 @@ namespace AddrAuditor.Editor
                     analyzeAllButton.style.height = 25f;
                     analyzeAllButton.clicked += () =>
                     {
-                        this.CreateAnalyzeCache();
+                        this.CreateAnalyzeCache(true);
                         foreach (var view in this.subCategories)
                             view.Analyze(this.analyzeCache);
                         this.subCategories[this.currentCategory].UpdateView();
@@ -111,19 +113,17 @@ namespace AddrAuditor.Editor
                 }
                 this.mainSplitView.Add(categories);
 
-                this.subCategories[(int)ANALYZE.ASSET_SETTINGS] = CreateSubView<AnalyzeViewAddrSetting>(true);
-                this.subCategories[(int)ANALYZE.GROUP_SETTINGS] = CreateSubView<AnalyzeViewGroupSetting>(true);
-                this.subCategories[(int)ANALYZE.DUPLICATED_ASSETS] = CreateSubView<AnalyzeViewDuplicatedAssets>(true);
-                this.subCategories[(int)ANALYZE.BUILT_IN_ASSETS] = CreateSubView<AnalyzeViewBuiltInAssets>(true);
-                this.subCategories[(int)ANALYZE.UNUSED_PROP] = CreateSubView<AnalyzeViewUnusedMaterialProp>(false);
-                this.subCategories[(int)ANALYZE.MISSING_REF] = CreateSubView<AnalyzeViewMissingReferences>(false);
-
-                // NOTE: TwoPaneSplitViewは初回だけRightPaneの挙動が違う
-                //       おそらく動的にPaneを再構築するのを想定してない
                 this.rightPane = new Box();
                 this.mainSplitView.Add(this.rightPane);
             }
             root.Add(this.mainSplitView);
+
+            this.subCategories[(int)ANALYZE.ASSET_SETTINGS] = CreateSubView<AnalyzeViewAddrSetting>(true);
+            this.subCategories[(int)ANALYZE.GROUP_SETTINGS] = CreateSubView<AnalyzeViewGroupSetting>(true);
+            this.subCategories[(int)ANALYZE.DUPLICATED_ASSETS] = CreateSubView<AnalyzeViewDuplicatedAssets>(true);
+            this.subCategories[(int)ANALYZE.BUILT_IN_ASSETS] = CreateSubView<AnalyzeViewBuiltInAssets>(true);
+            this.subCategories[(int)ANALYZE.UNUSED_PROP] = CreateSubView<AnalyzeViewUnusedMaterialProp>(false);
+            this.subCategories[(int)ANALYZE.MISSING_REF] = CreateSubView<AnalyzeViewMissingReferences>(false);
 
             this.UpdateSubView(0);
         }
@@ -131,20 +131,30 @@ namespace AddrAuditor.Editor
         /// <summary>
         /// create cache to be used multiple categories
         /// </summary>
-        void CreateAnalyzeCache()
+        void CreateAnalyzeCache(bool buildCache)
         {
             var setting = AddressableAssetSettingsDefaultObject.Settings;
-            var (refAssets, spAtlases) = AddrAutoGrouping.CollectReferencedAssetInfo(setting, null, false);
-            var entries = new List<AddressableAssetEntry>();
-            foreach (var t in setting.groups)
-                entries.AddRange(t.entries);
-            this.analyzeCache = new AnalyzeCache()
+            if (buildCache)
             {
-                //addrSetting = setting,
-                refAssets = refAssets,
-                explicitEntries = entries,
-                spriteAtlases = spAtlases,
-            };
+                var (refAssets, spAtlases) = AddrAutoGrouping.CollectReferencedAssetInfo(setting, null, false);
+                var entries = new List<AddressableAssetEntry>();
+                foreach (var t in setting.groups)
+                    entries.AddRange(t.entries);
+                this.analyzeCache = new AnalyzeCache()
+                {
+                    addrSetting = setting,
+                    refAssets = refAssets,
+                    explicitEntries = entries,
+                    spriteAtlases = spAtlases,
+                };
+            }
+            else
+            {
+                this.analyzeCache = new AnalyzeCache()
+                {
+                    addrSetting = setting,
+                };
+            }
         }
 
         /// <summary>
@@ -164,7 +174,7 @@ namespace AddrAuditor.Editor
         /// </summary>
         /// <typeparam name="T">SubCategory class</typeparam>
         /// <returns>SubCategory instance</returns>
-        static T CreateSubView<T>(bool splitThree) where T : SubCategoryView, new()
+        static T CreateSubView<T>(bool splitThree) where T : ResultView, new()
         {
             var view = new T();
             var orientation = splitThree ? TwoPaneSplitViewOrientation.Horizontal : TwoPaneSplitViewOrientation.Vertical;

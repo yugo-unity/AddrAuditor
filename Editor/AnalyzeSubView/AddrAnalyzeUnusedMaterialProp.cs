@@ -6,9 +6,9 @@ using UnityEditor;
 namespace AddrAuditor.Editor
 {
     /// <summary>
-    /// 使用されていないMaterialPropertyの検出
+    /// view for unused Material Properties
     /// </summary>
-    class AnalyzeViewUnusedMaterialProp : SubCategoryView
+    class AnalyzeViewUnusedMaterialProp : ResultView
     {
         static readonly string DETAILS_MESSAGE = "Materialに含まれる未使用のPropertyを検出します。MaterialのShaderを変更した際、" +
                                                  "変更前に使用されていたPropertyは自動で削除されません。\n" +
@@ -26,30 +26,28 @@ namespace AddrAuditor.Editor
 
         readonly List<UnusedProp> unusedProps = new();
         ListView listView;
-        Label detailsLabel; // カテゴリの説明文
+        Label detailsLabel;
 
         /// <summary>
-        /// 選択された時のコールバック
+        /// Callback when any column is selected
         /// </summary>
         void OnSelectedChanged(IEnumerable<int> selectedItems)
         {
-            if (selectedItems is not List<int> indexList)
+            if (selectedItems is not List<int> indexList || indexList.Count == 0)
                 return;
-            if (indexList.Count == 0)
-                return;
-
             var index = indexList[0];
             if (string.IsNullOrEmpty(this.unusedProps[index].assetPath))
                 return;
-            // Project Windowでフォーカスさせる
+            // focusing in Project Window
             var obj = this.unusedProps[index].material;
             Selection.activeObject = obj;
             EditorGUIUtility.PingObject(obj);
         }
 
         /// <summary>
-        /// 解析処理
+        /// called when require to analyze
         /// </summary>
+        /// <param name="cache">build cache that created by AddrAnalyzeWindow</param>
         public override void Analyze(AnalyzeCache cache)
         {
             this.unusedProps.Clear();
@@ -111,7 +109,7 @@ namespace AddrAuditor.Editor
         }
 
         /// <summary>
-        /// GUI構築
+        /// called when created view (only once)
         /// </summary>
         protected override void OnCreateView()
         {
@@ -167,8 +165,7 @@ namespace AddrAuditor.Editor
         }
 
         /// <summary>
-        /// 表示の更新
-        /// カテゴリが選択された時に呼ばれる
+        /// called when selecting any category
         /// </summary>
         public override void UpdateView()
         {

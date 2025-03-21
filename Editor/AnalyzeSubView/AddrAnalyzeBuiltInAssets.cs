@@ -8,9 +8,9 @@ using UnityEditor.Build.Profile;
 namespace AddrAuditor.Editor
 {
     /// <summary>
-    /// 重複しているアセットの検出
+    /// view for duplicated assets in built-in assets
     /// </summary>
-    class AnalyzeViewBuiltInAssets : SubCategoryView
+    class AnalyzeViewBuiltInAssets : ResultView
     {
         static readonly string DETAILS_MESSAGE = "Built-inとAssetBundleで重複して含まれているアセットを検出します。\n" +
                                                  "Built-inには極力アセットを含めないよう適切に対応してください。\n" +
@@ -37,9 +37,9 @@ namespace AddrAuditor.Editor
         /// </summary>
         void OnSelectedChanged(IEnumerable<int> selectedItems)
         {
-            if (!selectedItems.Any())
+            if (selectedItems is not List<int> indexList || indexList.Count == 0)
                 return;
-            var index = selectedItems.First();
+            var index = indexList[0];
             var dup = this.duplications[index];
             if (string.IsNullOrEmpty(dup.refAssetData.path))
                 return;
@@ -57,13 +57,13 @@ namespace AddrAuditor.Editor
         
         void OnSelectedReferenceChanged(IEnumerable<int> selectedItems)
         {
-            if (!selectedItems.Any())
-                return;
-            var index = selectedItems.First();
-            var dup = this.refEntries[index];
-            if (string.IsNullOrEmpty(dup.assetPath))
-                return;
-            
+            // if (!selectedItems.Any())
+            //     return;
+            // var index = selectedItems.First();
+            // var dup = this.refEntries[index];
+            // if (string.IsNullOrEmpty(dup.assetPath))
+            //     return;
+            //
             // // focusing in Project Window
             // var obj = AssetDatabase.LoadMainAssetAtPath(this.refEntries[index].assetPath);
             // Selection.activeObject = obj;
@@ -71,8 +71,9 @@ namespace AddrAuditor.Editor
         }
 
         /// <summary>
-        /// 解析処理
+        /// called when require to analyze
         /// </summary>
+        /// <param name="cache">build cache that created by AddrAnalyzeWindow</param>
         public override void Analyze(AnalyzeCache cache)
         {
             this.analyzeCache = cache;
@@ -170,7 +171,7 @@ namespace AddrAuditor.Editor
         }
 
         /// <summary>
-        /// GUI構築
+        /// called when created view (only once)
         /// </summary>
         protected override void OnCreateView()
         {
@@ -270,8 +271,7 @@ namespace AddrAuditor.Editor
         }
 
         /// <summary>
-        /// 表示の更新
-        /// カテゴリが選択された時に呼ばれる
+        /// called when selecting any category
         /// </summary>
         public override void UpdateView()
         {

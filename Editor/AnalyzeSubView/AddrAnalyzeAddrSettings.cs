@@ -3,15 +3,33 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEditor;
+using UnityEditor.AddressableAssets.Settings.GroupSchemas;
+using UnityEngine.ResourceManagement.ResourceProviders;
 
 namespace AddrAuditor.Editor
 {
-    class AnalyzeViewAddrSetting : SubCategoryView
+    class AnalyzeViewAddrSetting : ResultView
     {
-        static readonly List<string> AA_CATEGORIES = new()
+        enum ANALYZED_ITEM
+        {
+            LOG_RUNTIME_EXCEPTION,
+            JSON_CATALOG,
+            INTERNAL_ASSET_NAMING,
+            INTERNAL_BUNDLE_ID,
+            ASSET_LOAD_MODE,
+            UNIQUE_BUNDLE_IDS,
+            CONTIGUOUS_BUNDLES,
+            NON_RECURSIVE_DEPENDENCY,
+            STRIP_UNITY_VERSION,
+            DISABLE_VISIBLE_SUB_ASSET,
+            
+            MAX
+        }
+        
+        static readonly string[] ITEM_NAME = new string[(int)ANALYZED_ITEM.MAX]
         {
             "   Log Runtime Exception",
-            "   Enabled Json Catalog",
+            "   Enable Json Catalog",
             "   Internal Asset Naming Mode",
             "   Internal Bundle Id Mode",
             "   Asset Load Mode",
@@ -22,69 +40,110 @@ namespace AddrAuditor.Editor
             "   Disable Visible Sub Asset Representations",
         };
 
-        // TODO: purge to json file or csv or anything
-        static readonly string[] AA_DETAILS_JA = new[]
+        // TODO: purge to json file or csv or anything, and support English
+        static readonly string[] ITEM_RECOMMEND = new string[(int)ANALYZED_ITEM.MAX]
         {
-            "読み込みに失敗した際の例外処理はローカルアセットのみを考慮する場合不要です。",
-            "カタログファイルを以前のjson式に戻します。下位互換やデバッグ用途で使用します。",
-            "Bundle内のアセットをロードする際のID設定です。",
-            "Groupのエントリに変更があった際のAssetBundleのIDが変更による依存元のAssetBundleに差分を回避するための設定です。",
-            "AssetBundleの中身をリクエストに必要なもののみロードするか一括でロードするかの設定です。",
-            "Content Updateの為の設定です。",
-            "AssetBundle内のアセットをソートします。複雑な階層を持つPrefab等でのロード時間の改善が見込めます。",
-            "アセットの依存関係を非再帰的に検出しビルド時間とランタイムメモリの削減を行います。",
-            "AssetBundleのヘッダチャンクとSerialziedData内にあるUnity versionの値をゼロクリアします。",
-            "SubAssetの情報を削除しSubAssetが多いアセットに対してビルド時間の削減が見込めます。",
-        };
-
-        // TODO: purge to json file or csv or anything
-        static readonly string[] AA_RECOMMENDS_JA = new[]
-        {
-            "ローカルのみの場合は通常不要です。",
-            "通常は無効としてバイナリ式の方がベターです。",
-            "DynamicはGUIDを2byteに圧縮したもので、カタログサイズを削減できるので推奨されます。" +
-            "ただし同一グループ内にアセット数が非常に多く問題が起きる場合はGUIDを利用してください。" +
-            "またSceneが含まれるGroupに対してDynamicを適用すると" +
-            "SceneManagerにおいてScene名で検出が出来なくなることに注意してください。",
-            "Group Guidが推奨されます。ビルドマシン等を利用する際はGroup Guid Project Id Hashを使用することで" +
+            // LOG_RUNTIME_EXCEPTION
+            "読み込みに失敗した際の例外処理はローカルアセットのみを考慮する場合は不要ですので無効にできます。",
+            // JSON_CATALOG
+            "Catalogファイルをjsonで出力します。通常無効にしてbinaryで出力する方がファイルサイズが小さく、ロード時間が短いです。\n" +
+            "本設定は後方互換と開発用の為に存在します。",
+            // INTERNAL_ASSET_NAMING
+            "bundle内のアセットをロードする際のID設定です。DynamicはGUIDを2byteに圧縮しカタログサイズを削減できるので推奨されます。\n" +
+            "ただし同一グループ内にアセット数が非常に多く衝突が起きる場合はGUIDを利用してください。\n" +
+            "またSceneが含まれるGroupに対してDynamicを適用するとSceneManagerにおいてScene名で検出が出来なくなることに注意してください。",
+            // INTERNAL_BUNDLE_ID
+            "Groupのエントリに変更があった際、AssetBundleのIDが変更されることによって依存元のAssetBundleに差分が発生するのを回避するための設定です。\n" +
+            "通常Group Guidが推奨されます。ビルドマシン等を利用する際はGroup Guid Project Id Hashを使用することで" +
             "同一のプロジェクトで競合することを避けられます",
+            // ASSET_LOAD_MODE
+            "AssetBundleの中身をリクエストに必要なもののみロードするか一括でロードするかの設定です。\n" +
             "通常Requested Asset And Dependenciesのままで問題ありませんが、" +
             "PlatformによってはAll Packed Assets And Dependenciesとして一括ロードした方が" +
             "総合的にロード時間の短縮となるケースがあります。グループ構成によって設定を使い分けると良いでしょう。",
-            "無効にしてください。有効にするとAssetBundleのIDがユニークになりビルドが決定的ではなくなります。",
+            // UNIQUE_BUNDLE_IDS
+            "Content Updateの為の設定ですので無効にしてください。\n" +
+            "有効にするとAssetBundleのIDがユニークになりビルドがdeterministicではなくなります。",
+            // CONTIGUOUS_BUNDLES
+            "AssetBundle内のアセットをソートします。複雑な階層を持つPrefab等でのロード時間の改善が見込めます。\n" +
             "有効にしてください。このオプションは下位互換のために無効とすることができます。",
-            "有効にしてください。このオプションは下位互換のために無効とすることができます。" +
-            "本設定が有効の場合、MonoScriptの循環参照が解決できないのでMonoScript Bundleとの併用が推奨されます。",
-            "有効にしてください。ローカル専用としてAssetBundleを扱う場合不要なデータであり、余計な差分を発生する要因となります。" +
+            // NON_RECURSIVE_DEPENDENCY
+            "アセットの依存関係を非再帰的に検出しビルド時間とランタイムメモリの削減を行います。\n" +
+            "有効にしてください。このオプションは下位互換のために無効とすることができます。",
+            // STRIP_UNITY_VERSION
+            "AssetBundleのヘッダチャンクとSerialziedData内にあるUnity versionの値をゼロクリアします。\n" +
+            "有効にしてください。ローカル専用としてAssetBundleを扱う場合不要なデータであり、余計な差分を発生する要因となります。\n" +
             "なおUnityバージョンをまたいでのAssetBundle利用は動作を保証されていないことに注意してください。",
-            "有効にした場合、SubAssetを指定してのロードができなくなる制限が発生します。" +
-            "主としてSpriteAtlas内のSprite指定、fbx内のMeshやAnimation指定のロードができなくなります。" +
+            // DISABLE_VISIBLE_SUB_ASSET
+            "SubAssetの情報を削除しSubAssetが多いアセットに対してビルド時間の削減が見込めます。\n" +
+            "有効にした場合、SubAssetを指定してのロードができなくなる制限が発生します。\n" +
+            "主としてSpriteAtlas内のSprite指定、fbx内のMeshやAnimation指定のロードができなくなります。\n" +
             "プロジェクトの状況をみて有効にできそうであればするとベターでしょう。",
         };
-        
+
+        struct RecommendItem
+        {
+            public string category;
+            public string recommend;
+
+            public RecommendItem(ANALYZED_ITEM item)
+            {
+                this.category = ITEM_NAME[(int)item];
+                this.recommend = ITEM_RECOMMEND[(int)item];
+            }
+        }
+
         ListView listView;
-        VisualElement optionalView;
-        Label detailsLabel; // カテゴリの説明文
-        Label recommendationLabel; // サブカテゴリに対する推奨説明（個別に変わらない限りDetailで行う） 
+        Label recommendationLabel;
+        readonly List<RecommendItem> recommendItems = new();
 
         void OnSelectedChanged(IEnumerable<int> selectedItems)
         {
-            var index = selectedItems.First();
-            this.detailsLabel.text = AA_DETAILS_JA[index];
-            this.recommendationLabel.text = AA_RECOMMENDS_JA[index];
+            if (selectedItems is not List<int> indexList || indexList.Count == 0)
+                return;
+            var index = indexList[0];
+            this.recommendationLabel.text = this.recommendItems[index].recommend;
         }
 
         /// <summary>
-        /// 解析処理
+        /// called when require to analyze
         /// </summary>
+        /// <param name="cache">build cache that created by AddrAnalyzeWindow</param>
         public override void Analyze(AnalyzeCache cache)
         {
-            var settingsPath = $"Assets/{nameof(AddrAutoGroupingSettings)}.asset";
-            var groupingSettings = AssetDatabase.LoadAssetAtPath<AddrAutoGroupingSettings>(settingsPath);
+            this.listView.ClearSelection();
+            this.recommendItems.Clear();
+            this.recommendationLabel.text = "";
+            
+            var settings = cache.addrSetting;
+            var serializedObject = new SerializedObject(settings);
+            var stripUnityVersionProp = serializedObject.FindProperty("m_StripUnityVersionFromBundleBuild");
+            if (settings.buildSettings.LogResourceManagerExceptions)
+                this.recommendItems.Add(new RecommendItem(ANALYZED_ITEM.LOG_RUNTIME_EXCEPTION));
+            if (settings.EnableJsonCatalog)
+                this.recommendItems.Add(new RecommendItem(ANALYZED_ITEM.JSON_CATALOG));
+            if (settings.InternalIdNamingMode != BundledAssetGroupSchema.AssetNamingMode.Dynamic)
+                this.recommendItems.Add(new RecommendItem(ANALYZED_ITEM.INTERNAL_ASSET_NAMING));
+            if (settings.InternalBundleIdMode != BundledAssetGroupSchema.BundleInternalIdMode.GroupGuid)
+                this.recommendItems.Add(new RecommendItem(ANALYZED_ITEM.INTERNAL_BUNDLE_ID));
+            if (settings.AssetLoadMode != AssetLoadMode.AllPackedAssetsAndDependencies)
+                this.recommendItems.Add(new RecommendItem(ANALYZED_ITEM.ASSET_LOAD_MODE));
+            if (settings.UniqueBundleIds)
+                this.recommendItems.Add(new RecommendItem(ANALYZED_ITEM.UNIQUE_BUNDLE_IDS));
+            if (!settings.ContiguousBundles)
+                this.recommendItems.Add(new RecommendItem(ANALYZED_ITEM.CONTIGUOUS_BUNDLES));
+            if (!settings.NonRecursiveBuilding)
+                this.recommendItems.Add(new RecommendItem(ANALYZED_ITEM.NON_RECURSIVE_DEPENDENCY));
+            if (!stripUnityVersionProp.boolValue)
+                this.recommendItems.Add(new RecommendItem(ANALYZED_ITEM.STRIP_UNITY_VERSION));
+            if (!settings.DisableVisibleSubAssetRepresentations)
+                this.recommendItems.Add(new RecommendItem(ANALYZED_ITEM.DISABLE_VISIBLE_SUB_ASSET));
+            
+            this.listView.itemsSource = this.recommendItems;
         }
 
         /// <summary>
-        /// GUI構築
+        /// called when created view (only once)
         /// </summary>
         protected override void OnCreateView()
         {
@@ -100,51 +159,28 @@ namespace AddrAuditor.Editor
             this.listView.bindItem = (element, index) =>
             {
                 if (element is Label label)
-                {
-                    if (this.listView.itemsSource is List<string> list)
-                        label.text = list[index];
-                }
+                    label.text = this.recommendItems[index].category;
             };
             this.rootElement.Add(this.listView);
             
-            var descriptionView = new TwoPaneSplitView(0, 200, TwoPaneSplitViewOrientation.Vertical);
-            {
-                var box = new VisualElement();
-                var header = new Label("Details");
-                header.style.unityFontStyleAndWeight = FontStyle.Bold;
-                box.Add(header);
-                this.detailsLabel = new Label("explain what is setting");
-                this.detailsLabel.name = "itemExplanation";
-                this.detailsLabel.style.whiteSpace = WhiteSpace.Normal;
-                box.Add(this.detailsLabel);
-                foreach (var child in box.Children())
-                    child.style.left = 10f;
-                descriptionView.Add(box);
-
-                box = new VisualElement();
-                header = new Label("Recommendation");
-                header.style.unityFontStyleAndWeight = FontStyle.Bold;
-                box.Add(header);
-                this.recommendationLabel = new Label("About recommended setting");
-                this.recommendationLabel.style.whiteSpace = WhiteSpace.Normal;
-                box.Add(this.recommendationLabel);
-                foreach (var child in box.Children())
-                    child.style.left = 10f;
-                descriptionView.Add(box);
-            }
-            this.optionalView = descriptionView;
-            this.rootElement.Add(this.optionalView);
+            var box = new VisualElement();
+            var header = new Label("Recommendation");
+            header.style.unityFontStyleAndWeight = FontStyle.Bold;
+            box.Add(header);
+            this.recommendationLabel = new Label();
+            this.recommendationLabel.style.whiteSpace = WhiteSpace.Normal;
+            box.Add(this.recommendationLabel);
+            foreach (var child in box.Children())
+                child.style.left = 10f;
+            this.rootElement.Add(box);
         }
 
+        /// <summary>
+        /// called when selecting any category
+        /// </summary>
         public override void UpdateView()
         {
-            this.listView.itemsSource = AA_CATEGORIES;
-            // for (var i = 0; i < AA_CATEGORIES.Count; i++)
-            // {
-            //     var tree = new TreeView();
-            //     var assets = CreateTargetAssets(i.ToString());
-            //     tree.SetRootItems(assets);
-            // }
+            this.listView.itemsSource = this.recommendItems;
             this.listView.Rebuild();
         }
     }

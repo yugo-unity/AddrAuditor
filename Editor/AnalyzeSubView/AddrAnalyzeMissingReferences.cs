@@ -8,9 +8,9 @@ using UnityEditor.SceneManagement;
 namespace AddrAuditor.Editor
 {
     /// <summary>
-    /// Missingになっているアセット参照の検出
+    /// view for missing components/references
     /// </summary>
-    class AnalyzeViewMissingReferences : SubCategoryView
+    class AnalyzeViewMissingReferences : ResultView
     {
         static readonly string DETAILS_MESSAGE = "Missingになっているアセット参照をもつComponentを検出します。該当オブジェクトを確認し、適切に処理してください。\n" +
                                                  "なお、この解析はAddressableに関わらずプロジェクト全体に行われます。";
@@ -24,18 +24,15 @@ namespace AddrAuditor.Editor
 
         readonly List<MissingAsset> results = new();
         ListView listView;
-        Label detailsLabel; // カテゴリの説明文
+        Label detailsLabel;
         
         /// <summary>
-        /// 選択された時のコールバック
+        /// Callback when any column is selected
         /// </summary>
         void OnSelectedChanged(IEnumerable<int> selectedItems)
         {
-            if (selectedItems is not List<int> indexList)
+            if (selectedItems is not List<int> indexList || indexList.Count == 0)
                 return;
-            if (indexList.Count == 0)
-                return;
-
             var index = indexList[0];
             if (string.IsNullOrEmpty(this.results[index].assetPath))
                 return;
@@ -46,8 +43,9 @@ namespace AddrAuditor.Editor
         }
 
         /// <summary>
-        /// 解析処理
+        /// called when require to analyze
         /// </summary>
+        /// <param name="cache">build cache that created by AddrAnalyzeWindow</param>
         public override void Analyze(AnalyzeCache cache)
         {
             this.results.Clear();
@@ -86,7 +84,7 @@ namespace AddrAuditor.Editor
         }
 
         /// <summary>
-        /// GUI構築
+        /// called when created view (only once)
         /// </summary>
         protected override void OnCreateView()
         {
@@ -129,8 +127,7 @@ namespace AddrAuditor.Editor
         }
 
         /// <summary>
-        /// 表示の更新
-        /// カテゴリが選択された時に呼ばれる
+        /// called when selecting any category
         /// </summary>
         public override void UpdateView()
         {
