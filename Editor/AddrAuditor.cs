@@ -85,6 +85,11 @@ namespace AddrAuditor.Editor
                 EditorApplication.ExecuteMenuItem("Window/Asset Management/Addressables/Groups");
                 
                 settings.groups.Sort(AddrUtility.CompareGroup);
+                // Addressables now automatically sorts groups by sortOrder.
+                // It's stupid to sort twice, but there is no way to disable automatic sorting.
+                var sortSettings = AddressableAssetGroupSortSettings.GetSettings();
+                for (var i = 0; i < settings.groups.Count; ++i)
+                    sortSettings.sortOrder[i] = $"{i}";
                 settings.SetDirty(AddressableAssetSettings.ModificationEvent.EntryModified, eventData: null,
                     postEvent: true, settingsModified: true);
             };
