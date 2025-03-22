@@ -1,10 +1,9 @@
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
+using UnityEngine.ResourceManagement.ResourceProviders;
 using UnityEditor;
 using UnityEditor.AddressableAssets.Settings.GroupSchemas;
-using UnityEngine.ResourceManagement.ResourceProviders;
 
 namespace AddrAuditor.Editor
 {
@@ -28,16 +27,16 @@ namespace AddrAuditor.Editor
         
         static readonly string[] ITEM_NAME = new string[(int)ANALYZED_ITEM.MAX]
         {
-            "   Log Runtime Exception",
-            "   Enable Json Catalog",
-            "   Internal Asset Naming Mode",
-            "   Internal Bundle Id Mode",
-            "   Asset Load Mode",
-            "   Unique Bundle IDs",
-            "   Contiguous Bundles",
-            "   Non-Recursive Dependency Calculation",
-            "   Strip Unity Version from AssetBundles",
-            "   Disable Visible Sub Asset Representations",
+            "Log Runtime Exception",
+            "Enable Json Catalog",
+            "Internal Asset Naming Mode",
+            "Internal Bundle Id Mode",
+            "Asset Load Mode",
+            "Unique Bundle IDs",
+            "Contiguous Bundles",
+            "Non-Recursive Dependency Calculation",
+            "Strip Unity Version from AssetBundles",
+            "Disable Visible Sub Asset Representations",
         };
 
         // TODO: purge to json file or csv or anything, and support English
@@ -159,7 +158,7 @@ namespace AddrAuditor.Editor
             this.listView.bindItem = (element, index) =>
             {
                 if (element is Label label)
-                    label.text = this.recommendItems[index].category;
+                    label.text = $"   {this.recommendItems[index].category}";
             };
             this.rootElement.Add(this.listView);
             
