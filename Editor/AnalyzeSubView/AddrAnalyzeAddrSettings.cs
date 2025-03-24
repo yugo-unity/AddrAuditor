@@ -1,8 +1,10 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEngine.ResourceManagement.ResourceProviders;
 using UnityEditor;
+using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.AddressableAssets.Settings.GroupSchemas;
 
 namespace AddrAuditor.Editor
@@ -40,7 +42,7 @@ namespace AddrAuditor.Editor
         };
 
         // TODO: purge to json file or csv or anything, and support English
-        static readonly string[] ITEM_RECOMMEND = new string[(int)ANALYZED_ITEM.MAX]
+        static readonly string[] ITEM_DETAILS = new string[(int)ANALYZED_ITEM.MAX]
         {
             // LOG_RUNTIME_EXCEPTION
             "読み込みに失敗した際の例外処理はローカルアセットのみを考慮する場合は不要ですので無効にできます。",
@@ -59,7 +61,7 @@ namespace AddrAuditor.Editor
             "AssetBundleの中身をリクエストに必要なもののみロードするか一括でロードするかの設定です。\n" +
             "通常Requested Asset And Dependenciesのままで問題ありませんが、" +
             "PlatformによってはAll Packed Assets And Dependenciesとして一括ロードした方が" +
-            "総合的にロード時間の短縮となるケースがあります。グループ構成によって設定を使い分けると良いでしょう。",
+            "総合的にロード時間の短縮となるケースがあります。グループ構成によって設定を使い分けるとベターです。",
             // UNIQUE_BUNDLE_IDS
             "Content Updateの為の設定ですので無効にしてください。\n" +
             "有効にするとAssetBundleのIDがユニークになりビルドがdeterministicではなくなります。",
@@ -77,7 +79,7 @@ namespace AddrAuditor.Editor
             "SubAssetの情報を削除しSubAssetが多いアセットに対してビルド時間の削減が見込めます。\n" +
             "有効にした場合、SubAssetを指定してのロードができなくなる制限が発生します。\n" +
             "主としてSpriteAtlas内のSprite指定、fbx内のMeshやAnimation指定のロードができなくなります。\n" +
-            "プロジェクトの状況をみて有効にできそうであればするとベターでしょう。",
+            "プロジェクトの状況をみて有効にできそうであればするとベターです。",
         };
 
         struct RecommendItem
@@ -88,13 +90,14 @@ namespace AddrAuditor.Editor
             public RecommendItem(ANALYZED_ITEM item)
             {
                 this.category = ITEM_NAME[(int)item];
-                this.recommend = ITEM_RECOMMEND[(int)item];
+                this.recommend = ITEM_DETAILS[(int)item];
             }
         }
 
         ListView listView;
         Label recommendationLabel;
         readonly List<RecommendItem> recommendItems = new();
+        AddressableAssetSettings settings;
 
         void OnSelectedChanged(IEnumerable<int> selectedItems)
         {
@@ -114,28 +117,28 @@ namespace AddrAuditor.Editor
             this.recommendItems.Clear();
             this.recommendationLabel.text = "";
             
-            var settings = cache.addrSetting;
-            var serializedObject = new SerializedObject(settings);
+            this.settings = cache.addrSetting;
+            var serializedObject = new SerializedObject(this.settings);
             var stripUnityVersionProp = serializedObject.FindProperty("m_StripUnityVersionFromBundleBuild");
-            if (settings.buildSettings.LogResourceManagerExceptions)
+            if (this.settings.buildSettings.LogResourceManagerExceptions)
                 this.recommendItems.Add(new RecommendItem(ANALYZED_ITEM.LOG_RUNTIME_EXCEPTION));
-            if (settings.EnableJsonCatalog)
+            if (this.settings.EnableJsonCatalog)
                 this.recommendItems.Add(new RecommendItem(ANALYZED_ITEM.JSON_CATALOG));
-            if (settings.InternalIdNamingMode != BundledAssetGroupSchema.AssetNamingMode.Dynamic)
+            if (this.settings.InternalIdNamingMode != BundledAssetGroupSchema.AssetNamingMode.Dynamic)
                 this.recommendItems.Add(new RecommendItem(ANALYZED_ITEM.INTERNAL_ASSET_NAMING));
-            if (settings.InternalBundleIdMode != BundledAssetGroupSchema.BundleInternalIdMode.GroupGuid)
+            if (this.settings.InternalBundleIdMode != BundledAssetGroupSchema.BundleInternalIdMode.GroupGuid)
                 this.recommendItems.Add(new RecommendItem(ANALYZED_ITEM.INTERNAL_BUNDLE_ID));
-            if (settings.AssetLoadMode != AssetLoadMode.AllPackedAssetsAndDependencies)
+            if (this.settings.AssetLoadMode != AssetLoadMode.AllPackedAssetsAndDependencies)
                 this.recommendItems.Add(new RecommendItem(ANALYZED_ITEM.ASSET_LOAD_MODE));
-            if (settings.UniqueBundleIds)
+            if (this.settings.UniqueBundleIds)
                 this.recommendItems.Add(new RecommendItem(ANALYZED_ITEM.UNIQUE_BUNDLE_IDS));
-            if (!settings.ContiguousBundles)
+            if (!this.settings.ContiguousBundles)
                 this.recommendItems.Add(new RecommendItem(ANALYZED_ITEM.CONTIGUOUS_BUNDLES));
-            if (!settings.NonRecursiveBuilding)
+            if (!this.settings.NonRecursiveBuilding)
                 this.recommendItems.Add(new RecommendItem(ANALYZED_ITEM.NON_RECURSIVE_DEPENDENCY));
             if (!stripUnityVersionProp.boolValue)
                 this.recommendItems.Add(new RecommendItem(ANALYZED_ITEM.STRIP_UNITY_VERSION));
-            if (!settings.DisableVisibleSubAssetRepresentations)
+            if (!this.settings.DisableVisibleSubAssetRepresentations)
                 this.recommendItems.Add(new RecommendItem(ANALYZED_ITEM.DISABLE_VISIBLE_SUB_ASSET));
             
             this.listView.itemsSource = this.recommendItems;
@@ -148,6 +151,14 @@ namespace AddrAuditor.Editor
         {
             this.listView = new ListView();
             this.listView.selectedIndicesChanged += this.OnSelectedChanged;
+            this.listView.itemsChosen += chosenItems =>
+            {
+                if (!chosenItems.Any())
+                    return;
+                // focusing in Project Window
+                Selection.activeObject = this.settings;
+                EditorGUIUtility.PingObject(this.settings);
+            };
             this.listView.selectionType = SelectionType.Single;
             this.listView.makeItem = () =>
             {
@@ -163,7 +174,7 @@ namespace AddrAuditor.Editor
             this.rootElement.Add(this.listView);
             
             var box = new VisualElement();
-            var header = new Label("Recommendation");
+            var header = new Label("Details");
             header.style.unityFontStyleAndWeight = FontStyle.Bold;
             box.Add(header);
             this.recommendationLabel = new Label();

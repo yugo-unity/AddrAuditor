@@ -38,7 +38,7 @@ namespace AddrAuditor.Editor
         };
         
         // TODO: purge to json file or csv or anything, and support English
-        static readonly string[] ITEM_RECOMMEND = new string[(int)ANALYZED_ITEM.MAX]
+        static readonly string[] ITEM_DETAILS = new string[(int)ANALYZED_ITEM.MAX]
         {
             // USE_DEFAULT
             "Disableにしてください。Use Defaultはリモートアセットを意識した設定となっておりコンソールプラットフォームでは不適切な値となります。",
@@ -46,23 +46,21 @@ namespace AddrAuditor.Editor
             "ローカルアセットのみを考慮する場合、通常Uncompressedが推奨されます。PCはLZ4でも構いません。\n" +
             "プラットフォームによってはROM圧縮機能の併用を考慮しますが、DLCに関してはLZ4圧縮を検討する必要があるかもしれません。",
             // BUNDLE_CRC
-            "CRCチェックはAssetBundleダウンロード時の破損を判定することが主目的であり、ローカルアセットのみを考慮する場合は不要です。\n" +
+            "CRCチェックはbundleダウンロード時の破損を判定することが主目的であり、ローカルアセットのみを考慮する場合は不要です。\n" +
             "有効であると判定のためにロード時間が著しく延びることに注意してください。",
             // BUNDLE_NAMING
-            "FileName、またはFileName Hashとしてください。AssetBundleのファイル名設定となります。\n" +
-            "AppendやOnly Hashの際のHash値はAssetBundleの内容物から計算されるために変更があった場合に別ファイルとして扱われます。",
+            "FileName、またはFileName Hashとしてください。bundleのファイル名設定となります。\n" +
+            "AppendやOnly Hashの際のHash値はbundleの内容物から計算されるために変更があった場合に別ファイルとして扱われます。",
             // INCLUDE_IN_CATALOG
             "Addresses、GUIDsはどちらかのみ有効とする方が望ましいです。\n" +
             "Catalogファイルに書き込まれますが、両対応するとCatalogファイルの肥大化につながります。" +
             "GUIDsの場合はAssetReferenceからのロードがスムーズです。",
             // INTERNAL_ASSET_NAMING
-            "AddressablesAssetSettingsのCatalog設定のところが共通設定となり通常Dynamicが推奨されますが、\n" +
-            "Sceneアセットが含まれるGroupでは注意が必要です。" +
-            "Dynamicの場合はSceneManagerクラスにおいてScene名の文字列でSceneクラスを取得することができなくなります。",
+            "AddressableAssetSettingsのCatalog設定が共通設定となり通常Dynamicが推奨されますが、\n" +
+            "Sceneが含まれるGroupではSceneManagerクラスにおいてScene名の文字列が扱えなくなることに注意してください。",
             // BUNDLE_MODE
-            "Pack SeparatelyによってAssetBundleの数が著しく増えると、ビルド時間やロード時間のオーバーヘッドとなります。\n" +
-            "なるべくPacked TogetherになるようGroupingを検討してください。\n" +
-            "ただしAssetBundleのUnloadはbundle単位で行われますのでエントリが著しく多いGroupでのPacked Togetherには注意してください。",
+            "Pack Separatelyによってbundleの数が多いと、ビルド時間やロード時間のオーバーヘッドとなります。\n" +
+            "ただしUnloadはbundle単位で行われる為、entryが多い場合のGroupのPacked Togetherにも注意してください。",
             // INCLUDE_IN_BUILD
             "開発中のデバッグ用途やDLCのグループをROMビルドの際から除外する際に利用可能です。\n" +
             "意図せず無効となっていないか確認してください。",
@@ -78,7 +76,7 @@ namespace AddrAuditor.Editor
             {
                 this.group = group;
                 this.category = ITEM_NAME[(int)item];
-                this.recommend = ITEM_RECOMMEND[(int)item];
+                this.recommend = ITEM_DETAILS[(int)item];
             }
         }
 
@@ -120,16 +118,24 @@ namespace AddrAuditor.Editor
                     this.recommendItems.Add(new RecommendItem(group, ANALYZED_ITEM.BUNDLE_NAMING));
                 if (schema.IncludeAddressInCatalog && schema.IncludeGUIDInCatalog)
                     this.recommendItems.Add(new RecommendItem(group, ANALYZED_ITEM.INCLUDE_IN_CATALOG));
-                if (group.entries.Select(entry => entry.AssetPath.Contains(".unity")).FirstOrDefault())
+                foreach (var entry in group.entries)
                 {
-                    if (schema.InternalIdNamingMode == BundledAssetGroupSchema.AssetNamingMode.Dynamic)
-                        this.recommendItems.Add(new RecommendItem(group, ANALYZED_ITEM.INTERNAL_ASSET_NAMING));
+                    if (AssetDatabase.GetMainAssetTypeAtPath(entry.AssetPath) == typeof(SceneAsset))
+                    {
+                        if (schema.InternalIdNamingMode == BundledAssetGroupSchema.AssetNamingMode.Dynamic)
+                        {
+                            this.recommendItems.Add(new RecommendItem(group, ANALYZED_ITEM.INTERNAL_ASSET_NAMING));
+                            break;
+                        }
+                    }
                 }
-                if (schema.BundleMode == BundledAssetGroupSchema.BundlePackingMode.PackSeparately)
+                // 著しくEntryが多い場合に判定
+                if (group.entries.Count > 128)
                 {
-                    if (!group.name.Contains("+Shared_Single"))
+                    if (!group.name.Contains(AddrAutoGrouping.SHARED_GROUP_NAME) && !group.name.Contains(AddrAutoGrouping.RESIDENT_GROUP_NAME))
                         this.recommendItems.Add(new RecommendItem(group, ANALYZED_ITEM.BUNDLE_MODE));
                 }
+
                 if (!schema.IncludeInBuild)
                     this.recommendItems.Add(new RecommendItem(group, ANALYZED_ITEM.INCLUDE_IN_BUILD));
             }
@@ -172,7 +178,7 @@ namespace AddrAuditor.Editor
             this.rootElement.Add(this.listView);
             
             var box = new VisualElement();
-            var header = new Label("Recommendation");
+            var header = new Label("Details");
             header.style.unityFontStyleAndWeight = FontStyle.Bold;
             box.Add(header);
             this.recommendationLabel = new Label();

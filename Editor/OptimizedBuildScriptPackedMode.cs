@@ -18,6 +18,7 @@ namespace AddrAuditor.Editor
     public class OptimizedBuildScriptPackedMode : BuildScriptPackedMode
     {
         public override string Name => "Optimized Build Script";
+        bool sripUnityVersionCache;
 
         public override void ClearCachedData()
         {
@@ -25,27 +26,36 @@ namespace AddrAuditor.Editor
             ContentPipeline.BuildCallbacks.PostScriptsCallbacks = null;
             ContentPipeline.BuildCallbacks.PostPackingCallback = null;
             //ContentPipeline.BuildCallbacks.PostWritingCallback = null;
-            
+
             //Debug.LogWarning("Clear BuildCallbacks-------------"); // for checking
-            
+
             base.ClearCachedData();
         }
-        
+
         protected override TResult BuildDataImplementation<TResult>(AddressablesDataBuilderInput builderInput)
         {
             // NOTE: 
             // we can reduce bundle data if disabled TypeTree with the following restrictions:
             // - required full build, not content update (no version compatibility) 
             // - using only for Player, not for Editor
-            ContentPipeline.BuildCallbacks.PostScriptsCallbacks = (buildParameters, dependencyData) => {
+            ContentPipeline.BuildCallbacks.PostScriptsCallbacks = (buildParameters, dependencyData) =>
+            {
                 buildParameters.ContentBuildFlags |= ContentBuildFlags.DisableWriteTypeTree;
                 return ReturnCode.Success;
             };
 
             ContentPipeline.BuildCallbacks.PostPackingCallback = PostPacking;
-            
+
             //ContentPipeline.BuildCallbacks.PostWritingCallback = PostWriting;
-            
+
+            // no need to set (not be allowed) StripUnityVersion with DisableWriteTypeTree
+            var settings = AddressableAssetSettingsDefaultObject.Settings;
+            var serializedObject = new SerializedObject(settings);
+            var stripUnityVersionProp = serializedObject.FindProperty("m_StripUnityVersionFromBundleBuild");
+            this.sripUnityVersionCache = stripUnityVersionProp.boolValue;
+            stripUnityVersionProp.boolValue = false;
+            serializedObject.ApplyModifiedProperties();
+
             return base.BuildDataImplementation<TResult>(builderInput);
         }
 
@@ -71,7 +81,8 @@ namespace AddrAuditor.Editor
                     {
                         var buildSettings = buildParameters.GetContentBuildSettings();
                         var usageTags = new BuildUsageTagSet();
-                        var sceneInfo = ContentBuildInterface.CalculatePlayerDependenciesForScene(entry.AssetPath, buildSettings, usageTags, dependencyData.DependencyUsageCache);
+                        var sceneInfo = ContentBuildInterface.CalculatePlayerDependenciesForScene(entry.AssetPath, buildSettings, usageTags,
+                            dependencyData.DependencyUsageCache);
                         foreach (var objId in sceneInfo.referencedObjects)
                             usedAssets.Add(objId);
                     }
@@ -87,7 +98,7 @@ namespace AddrAuditor.Editor
                         objects = ContentBuildInterface.GetPlayerDependenciesForObjects(objects, buildTarget, null);
                         foreach (var objId in objects)
                             usedAssets.Add(objId);
-                        
+
                         // NOTE: フォルダは依存関係としてSubAssetが検出されないので明示検索
                         if (entry.IsFolder && entry.SubAssets != null)
                         {
@@ -102,7 +113,7 @@ namespace AddrAuditor.Editor
                     }
                 }
             }
-            
+
             // bundleに含まれるObjectIdentiferから参照をもたないもの（利用されていないもの）を除外する
             // 主としてfbxのRig, Avator, Mesh, Material等を目的とする
             // NOTE: fbxはコンテナ扱いなので必要なSubAssetの重複を解決する為にfbxをエントリすると使用しないSubAssetまでついてくる
@@ -122,16 +133,20 @@ namespace AddrAuditor.Editor
                             {
                                 info.includedObjects.RemoveAt(i);
                                 --i;
-                                
+
                                 var instance = ObjectIdentifier.ToObject(objId);
                                 var path = AssetDatabase.GUIDToAssetPath(objId.guid);
-                                Debug.Log($"Removed IncludedObjects ---- {path} : {instance.name}[{instance.GetType()}]");
+                                Debug.Log($"Removed unreferenced IncludedObjects ---- {path} : {instance.name}[{instance.GetType()}]");
                             }
                         }
                     }
                 }
             }
 
+            var serializedObject = new SerializedObject(settings);
+            var stripUnityVersionProp = serializedObject.FindProperty("m_StripUnityVersionFromBundleBuild");
+            stripUnityVersionProp.boolValue = this.sripUnityVersionCache;
+            serializedObject.ApplyModifiedProperties();
 
             return ReturnCode.Success;
         }
@@ -173,7 +188,8 @@ namespace AddrAuditor.Editor
             builder.AppendLine("\tpublic static class AssetTable {");
             builder.AppendLine("\t\tpublic static readonly Dictionary<string, string> internalSceneName = new () {");
             builder.Append("\t\t\t{ ");
-            foreach (var op in writeData.WriteOperations) {
+            foreach (var op in writeData.WriteOperations)
+            {
                 if (op is SceneBundleWriteOperation sceneOp)
                 {
                     foreach (var scenes in sceneOp.Info.bundleScenes)
@@ -184,13 +200,14 @@ namespace AddrAuditor.Editor
                     }
                 }
             }
+
             builder.AppendLine("\t\t};");
             builder.AppendLine("\t};");
             builder.AppendLine("};");
             builder.Replace("\r\n", "\n", 0, builder.Length); // Convert CRLF to LF
             File.WriteAllText(Application.dataPath + "\\AddressablesExtend\\AssetTable.cs", builder.ToString(), Encoding.UTF8);
             AssetDatabase.Refresh(ImportAssetOptions.ImportRecursive);
-            
+
             // // to Encrypt AssetBundle
             // var bundleResults = (IBundleBuildResults)results;
             // foreach (var ret in bundleResults.BundleInfos.Values)
