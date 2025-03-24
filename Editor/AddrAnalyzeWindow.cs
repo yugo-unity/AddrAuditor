@@ -58,6 +58,21 @@ namespace AddrAuditor.Editor
                 header.style.borderBottomColor = Color.black;
                 header.style.flexDirection = FlexDirection.Row;
 
+                var clearCacheButton = new Button();
+                {
+                    clearCacheButton.text = "Clear Cache";
+                    clearCacheButton.style.width = 100f;
+                    clearCacheButton.style.height = 25f;
+                    clearCacheButton.clicked += () =>
+                    {
+                        this.analyzeCache.refAssets = null;
+                        this.analyzeCache.explicitEntries = null;
+                        this.analyzeCache.spriteAtlases = null;
+                        this.CreateSubViews();
+                        this.UpdateSubView(this.currentCategory);
+                    };
+                }
+                header.Add(clearCacheButton);
                 var analyzeButton = new Button();
                 {
                     analyzeButton.text = "Analyze";
@@ -118,13 +133,7 @@ namespace AddrAuditor.Editor
             }
             root.Add(this.mainSplitView);
 
-            this.subCategories[(int)ANALYZE.ASSET_SETTINGS] = CreateSubView<AnalyzeViewAddrSetting>(true);
-            this.subCategories[(int)ANALYZE.GROUP_SETTINGS] = CreateSubView<AnalyzeViewGroupSetting>(true);
-            this.subCategories[(int)ANALYZE.DUPLICATED_ASSETS] = CreateSubView<AnalyzeViewDuplicatedAssets>(true);
-            this.subCategories[(int)ANALYZE.BUILT_IN_ASSETS] = CreateSubView<AnalyzeViewBuiltInAssets>(true);
-            this.subCategories[(int)ANALYZE.UNUSED_PROP] = CreateSubView<AnalyzeViewUnusedMaterialProp>(true);
-            this.subCategories[(int)ANALYZE.MISSING_REF] = CreateSubView<AnalyzeViewMissingReferences>(false);
-
+            this.CreateSubViews();
             this.UpdateSubView(0);
         }
 
@@ -134,27 +143,37 @@ namespace AddrAuditor.Editor
         void CreateAnalyzeCache(bool buildCache)
         {
             var setting = AddressableAssetSettingsDefaultObject.Settings;
+            if (this.analyzeCache == null)
+            {
+                this.analyzeCache = new AnalyzeCache()
+                {
+                    addrSetting = setting,
+                };
+            }
+
             if (buildCache)
             {
-                var (refAssets, spAtlases) = AddrAutoGrouping.CollectReferencedAssetInfo(setting, null, false);
-                var entries = new List<AddressableAssetEntry>();
-                foreach (var t in setting.groups)
-                    entries.AddRange(t.entries);
-                this.analyzeCache = new AnalyzeCache()
+                if (this.analyzeCache.refAssets == null)
                 {
-                    addrSetting = setting,
-                    refAssets = refAssets,
-                    explicitEntries = entries,
-                    spriteAtlases = spAtlases,
-                };
+                    var (refAssets, spAtlases) = AddrAutoGrouping.CollectReferencedAssetInfo(setting, null, false);
+                    var entries = new List<AddressableAssetEntry>();
+                    foreach (var t in setting.groups)
+                        entries.AddRange(t.entries);
+                    this.analyzeCache.refAssets = refAssets;
+                    this.analyzeCache.explicitEntries = entries;
+                    this.analyzeCache.spriteAtlases = spAtlases;
+                }
             }
-            else
-            {
-                this.analyzeCache = new AnalyzeCache()
-                {
-                    addrSetting = setting,
-                };
-            }
+        }
+
+        void CreateSubViews()
+        {
+            this.subCategories[(int)ANALYZE.ASSET_SETTINGS] = CreateSubView<AnalyzeViewAddrSetting>(true);
+            this.subCategories[(int)ANALYZE.GROUP_SETTINGS] = CreateSubView<AnalyzeViewGroupSetting>(true);
+            this.subCategories[(int)ANALYZE.DUPLICATED_ASSETS] = CreateSubView<AnalyzeViewDuplicatedAssets>(true);
+            this.subCategories[(int)ANALYZE.BUILT_IN_ASSETS] = CreateSubView<AnalyzeViewBuiltInAssets>(true);
+            this.subCategories[(int)ANALYZE.UNUSED_PROP] = CreateSubView<AnalyzeViewUnusedMaterialProp>(true);
+            this.subCategories[(int)ANALYZE.MISSING_REF] = CreateSubView<AnalyzeViewMissingReferences>(false);
         }
 
         /// <summary>
