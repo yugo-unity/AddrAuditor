@@ -82,16 +82,24 @@ namespace AddrAuditor.Editor
             button.style.alignSelf = new StyleEnum<Align>(Align.Center);
             button.clicked += () =>
             {
-                EditorApplication.ExecuteMenuItem("Window/Asset Management/Addressables/Groups");
-                
-                settings.groups.Sort(AddrUtility.CompareGroup);
+                var allEditorWindows = Resources.FindObjectsOfTypeAll<EditorWindow>();
+                foreach (var editorWindow in allEditorWindows)
+                {
+                    if (editorWindow.titleContent.text != "Addressables Groups")
+                        continue;
+                    editorWindow.Close();
+                    break;
+                }
                 // Addressables now automatically sorts groups by sortOrder.
                 // It's stupid to sort twice, but there is no way to disable automatic sorting.
+                settings.groups.Sort(AddrUtility.CompareGroup);
                 var sortSettings = AddressableAssetGroupSortSettings.GetSettings();
+                if (sortSettings.sortOrder.Length != settings.groups.Count)
+                    sortSettings.sortOrder = new string[settings.groups.Count];
                 for (var i = 0; i < settings.groups.Count; ++i)
-                    sortSettings.sortOrder[i] = $"{i}";
-                settings.SetDirty(AddressableAssetSettings.ModificationEvent.EntryModified, eventData: null,
-                    postEvent: true, settingsModified: true);
+                    sortSettings.sortOrder[i] = settings.groups[i].Guid;
+                EditorUtility.SetDirty(sortSettings);
+                EditorApplication.ExecuteMenuItem("Window/Asset Management/Addressables/Groups");
             };
             
             button = AddrUtility.CreateButton(root, "Open Dependencies Graph",
