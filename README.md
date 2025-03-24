@@ -1,6 +1,6 @@
 # ADDR Auditor
 
-supported Addressables 2.1 or later<br>
+supported Addressables 2.3.16 or later<br>
 
 <i>[EN]</i><br>
 This is a extension for Addressables if you create Standalone and Console Game. </br>
@@ -26,14 +26,11 @@ Addressablesのバンドル間の依存関係を可視化することで意図�
 ![image](https://github.com/user-attachments/assets/af42faaf-7739-49e1-8fdd-f9e6605f6001)</br>
 ![image](https://github.com/user-attachments/assets/9da84aa4-9b80-4928-ab59-cd0c805caa90)</br>
 
-## 2. Analyze & Suggest any settings (not implemented)
+## 2. Analyze & Suggest any settings
 <i>[EN]</i><br>
 AddressablesAssetSettings and AddressablesGroupSettings are analyzed and better configulations are proposed and configured.</br>
-<b>This is not yet implemented.</b><br>
 <i>[JA]</i><br>
 Addressables Asset SettingsおよびAddressables Groupの設定を解析し、最適なものを提案・設定します。</br>
-<b>こちらはまだ未実装です。</b>
-
 
 ## 3. Automatic Shared-Group
 <i>[EN]</i><br>
@@ -118,25 +115,8 @@ Output log to confirm hash of assetbundle name and file name. For confirmation.
 <br><i>[JA]</i><br>
 アセットバンドル名のハッシュとファイル名を確認するためのログを出力します。確認用です。
 
-### 3. Remove Unused Material Properties
-<i>[EN]</i><br>
-Removes serialized properties in the material but not used. </br>
-If the material has properties that were used by previously configured shaders,</br>
-the serialization data is not deleted. For example, unused textures will be contained in the asset bundle. </br>
-Conversely, if you have tricky implementations, such as switching shaders at runtime, it is not better to delete it.<br>
-This will be integrated <b>Analyze & Suggest any settings</b>.
-<br><i>[JA]</i><br>
-マテリアルにシリアライズされているが使用されていないプロパティ情報を削除します。</br>
-マテリアルに以前設定されていたシェーダーが使用していたプロパティがある場合、</br>
-シリアライズデータは削除されないので、特にテクスチャ参照があると使用しないテクスチャがアセットバンドルに組み込まれます。</br>
-逆にランタイムでマテリアルのシェーダーを切り替える、といったトリッキーな実装をしている場合は削除しない方が良いです。<br>
-<b>Analyze & Suggest any settings</b> に統合予定です。
-
 
 ## Planned
-- <t>Analyze & Suggest any settings</t>
-  - <i>[EN]</i> The setting various settings as recommended is under consideration
-  - <i>[JA]</i> 各種設定を推奨設定する機能を検討中
 - <t>Use Short Load Path</t>
   - <i>[EN]</i> if "Load Path" is local by default, namespace is redundant, and the size of the catalog is increased when there are the large number of bundles
     - you can suppress catalog size by using your own shortened property as a wrapper
