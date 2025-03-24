@@ -19,7 +19,6 @@ namespace AddrAuditor.Editor
         {
             public string assetPath;
             public string gameObjectPath;
-            public GameObject gameObject;
         }
 
         readonly List<MissingAsset> results = new();
@@ -34,10 +33,16 @@ namespace AddrAuditor.Editor
             if (selectedItems is not List<int> indexList || indexList.Count == 0)
                 return;
             var index = indexList[0];
-            if (string.IsNullOrEmpty(this.results[index].assetPath))
+            var ret = this.results[index];
+            if (string.IsNullOrEmpty(ret.assetPath))
                 return;
+            Object obj = null;
+            var activeScene = SceneManager.GetActiveScene(); 
             // Project Windowでフォーカスさせる
-            var obj = this.results[index].gameObject;
+            if (activeScene.path != ret.assetPath)
+                obj = AssetDatabase.LoadAssetAtPath(ret.assetPath, typeof(Object));
+            else
+                obj = GameObject.Find(ret.gameObjectPath);
             Selection.activeObject = obj;
             EditorGUIUtility.PingObject(obj);
         }
@@ -154,7 +159,7 @@ namespace AddrAuditor.Editor
             {
                 if (component != null)
                     continue;
-                AddMissingList(missingList, assetPath, objPath, gameObject);
+                AddMissingList(missingList, assetPath, objPath);
             }
 
             // 子のGameObjectを再帰的に検索
@@ -163,10 +168,11 @@ namespace AddrAuditor.Editor
             {
                 var t = transform.GetChild(c);
                 var pt = PrefabUtility.GetPrefabAssetType(t.gameObject);
+                var nextObjPath = $"{objPath}/{t.name}";
                 if (pt == PrefabAssetType.MissingAsset)
-                    AddMissingList(missingList, assetPath, objPath, t.gameObject);
+                    AddMissingList(missingList, assetPath, nextObjPath);
                 else
-                    DigMissingComponents(missingList, assetPath, $"{objPath}/{t.name}", t.gameObject);
+                    DigMissingComponents(missingList, assetPath, nextObjPath, t.gameObject);
             }
         }
 
@@ -177,13 +183,12 @@ namespace AddrAuditor.Editor
         /// <param name="path">該当のアセットパス</param>
         /// <param name="objPath">該当のGameObjectパス</param>
         /// <param name="obj">該当のGameObject</param>
-        static void AddMissingList(List<MissingAsset> list, string path, string objPath, GameObject obj)
+        static void AddMissingList(List<MissingAsset> list, string path, string objPath)
         {
             list.Add(new MissingAsset()
             {
                 assetPath = path,
                 gameObjectPath = objPath,
-                gameObject = obj,
             });
         }
     }
