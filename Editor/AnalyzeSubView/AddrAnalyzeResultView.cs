@@ -30,7 +30,7 @@ namespace AddrAuditor.Editor
 
         public void CreateView(TwoPaneSplitViewOrientation orientation)
         {
-            var dimension = orientation == TwoPaneSplitViewOrientation.Horizontal ? 500 : 70;
+            var dimension = orientation == TwoPaneSplitViewOrientation.Horizontal ? 580 : 70;
             var root = new TwoPaneSplitView(0, dimension, orientation);
             this.rootElement = root;
             this.OnCreateView();

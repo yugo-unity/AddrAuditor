@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEditor;
@@ -17,15 +18,36 @@ namespace AddrAuditor.Editor
         
         class UnusedProp
         {
+            public string guid;
             public string assetPath;
             public Material material;
             public SerializedProperty sp;
             public string propName;
             public int propIndex;
+            public RefAssetData refAssetData;
+            bool initRefAssetData;
+            
+            public void AddList(List<UnusedProp> list, SerializedProperty sp, int index, string propName, AnalyzeCache analyzeCache)
+            {
+                this.sp = sp;
+                this.propIndex = index;
+                this.propName = propName;
+                if (this.initRefAssetData == false)
+                {
+                    this.refAssetData = analyzeCache.refAssets.Find(item => item.guid == this.guid);
+                    this.initRefAssetData = true;
+                }
+                list.Add(this);
+            }
         }
 
+        public override bool requireAnalyzeCache => true;
         readonly List<UnusedProp> unusedProps = new();
-        ListView listView;
+        readonly List<RefEntry> refEntries = new ();
+        
+        AnalyzeCache analyzeCache;
+        ListView listView, referenceView;
+        VisualElement optionalView;
         Label detailsLabel;
 
         /// <summary>
@@ -36,10 +58,31 @@ namespace AddrAuditor.Editor
             if (selectedItems is not List<int> indexList || indexList.Count == 0)
                 return;
             var index = indexList[0];
-            if (string.IsNullOrEmpty(this.unusedProps[index].assetPath))
+            var propData = this.unusedProps[index];
+            if (string.IsNullOrEmpty(propData.assetPath))
                 return;
+            
+            // // focusing in Project Window
+            // Selection.activeObject = propData.material;
+            // EditorGUIUtility.PingObject(propData);
+            
+            FindReferencedEntries(this.refEntries, this.analyzeCache, propData.refAssetData);
+            this.referenceView.ClearSelection();
+            this.referenceView.itemsSource = this.refEntries;
+            this.referenceView.Rebuild();
+        }
+        
+        void OnSelectedReferenceChanged(IEnumerable<int> selectedItems)
+        {
+            if (!selectedItems.Any())
+                return;
+            var index = selectedItems.First();
+            var dup = this.refEntries[index];
+            if (string.IsNullOrEmpty(dup.assetPath))
+                return;
+            
             // focusing in Project Window
-            var obj = this.unusedProps[index].material;
+            var obj = AssetDatabase.LoadMainAssetAtPath(this.refEntries[index].assetPath);
             Selection.activeObject = obj;
             EditorGUIUtility.PingObject(obj);
         }
@@ -50,6 +93,7 @@ namespace AddrAuditor.Editor
         /// <param name="cache">build cache that created by AddrAnalyzeWindow</param>
         public override void Analyze(AnalyzeCache cache)
         {
+            this.analyzeCache = cache;
             this.unusedProps.Clear();
             //var guids = AssetDatabase.FindAssets("t:Material"); // include Packages
             var serachFolder = new string[] { "Assets", };
@@ -74,12 +118,20 @@ namespace AddrAuditor.Editor
                 var sp = so.FindProperty("m_SavedProperties");
 
                 var texEnvSp = sp.FindPropertyRelative("m_TexEnvs");
+                var unusedProp = new UnusedProp()
+                {
+                    guid = guid,
+                    assetPath = path,
+                    material = m,
+                    //sp = sp,
+                    // propIndex = index,
+                    // propName = propName,
+                };
                 for (var i = texEnvSp.arraySize - 1; i >= 0; i--)
                 {
                     var propName = texEnvSp.GetArrayElementAtIndex(i).FindPropertyRelative("first").stringValue;
-
                     if (!properties.Contains(propName))
-                        AddUnusedList(this.unusedProps, path, m, texEnvSp, i, propName);
+                        unusedProp.AddList(unusedProps, texEnvSp, i, propName, analyzeCache);
                 }
 
                 var floatsSp = sp.FindPropertyRelative("m_Floats");
@@ -87,7 +139,7 @@ namespace AddrAuditor.Editor
                 {
                     var propName = floatsSp.GetArrayElementAtIndex(i).FindPropertyRelative("first").stringValue;
                     if (!properties.Contains(propName))
-                        AddUnusedList(this.unusedProps, path, m, floatsSp, i, propName);
+                        unusedProp.AddList(unusedProps, floatsSp, i, propName, analyzeCache);
                 }
 
                 var intSp = sp.FindPropertyRelative("m_Ints");
@@ -95,7 +147,7 @@ namespace AddrAuditor.Editor
                 {
                     var propName = intSp.GetArrayElementAtIndex(i).FindPropertyRelative("first").stringValue;
                     if (!properties.Contains(propName))
-                        AddUnusedList(this.unusedProps, path, m, intSp, i, propName);
+                        unusedProp.AddList(unusedProps, intSp, i, propName, analyzeCache);
                 }
 
                 var colorsSp = sp.FindPropertyRelative("m_Colors");
@@ -103,7 +155,7 @@ namespace AddrAuditor.Editor
                 {
                     var propName = colorsSp.GetArrayElementAtIndex(i).FindPropertyRelative("first").stringValue;
                     if (!properties.Contains(propName))
-                        AddUnusedList(this.unusedProps, path, m, colorsSp, i, propName);
+                        unusedProp.AddList(unusedProps, colorsSp, i, propName, analyzeCache);
                 }
             }
         }
@@ -112,26 +164,13 @@ namespace AddrAuditor.Editor
         /// called when created view (only once)
         /// </summary>
         protected override void OnCreateView()
-        {
-            var box = new VisualElement();
-            var header = new Label("Details");
-            header.style.unityFontStyleAndWeight = FontStyle.Bold;
-            box.Add(header);
-            this.detailsLabel = new Label("explain what is setting");
-            this.detailsLabel.style.whiteSpace = WhiteSpace.Normal;
-            this.detailsLabel.text = DETAILS_MESSAGE;
-            box.Add(this.detailsLabel);
-            foreach (var child in box.Children())
-                child.style.left = 10f;
-            this.rootElement.Add(box);
-            
+        {   
             this.listView = new ListView();
             this.listView.fixedItemHeight = 25f;
             this.listView.selectedIndicesChanged += this.OnSelectedChanged;
             this.listView.selectionType = SelectionType.Single;
             this.listView.makeItem = () =>
             {
-                // 項目の基礎を構築（Label と Button を含む）
                 var container = new VisualElement();
                 container.style.flexDirection = FlexDirection.Row;
                 
@@ -162,6 +201,64 @@ namespace AddrAuditor.Editor
                 };
             };
             this.rootElement.Add(this.listView);
+            
+            this.optionalView = new TwoPaneSplitView(0, 200, TwoPaneSplitViewOrientation.Vertical);
+            {
+                var box = new VisualElement();
+                {
+                    var header = new Label("Details");
+                    header.style.unityFontStyleAndWeight = FontStyle.Bold;
+                    box.Add(header);
+                    this.detailsLabel = new Label("explain what is setting");
+                    this.detailsLabel.style.whiteSpace = WhiteSpace.Normal;
+                    this.detailsLabel.text = DETAILS_MESSAGE;
+                    box.Add(this.detailsLabel);
+                    foreach (var child in box.Children())
+                        child.style.left = 10f;
+                }
+                this.optionalView.Add(box);
+
+                box = new VisualElement();
+                {
+                    var header = new Label("Referencing Entries");
+                    header.style.unityFontStyleAndWeight = FontStyle.Bold;
+                    box.Add(header);
+                    this.referenceView = new ListView();
+                    {
+                        this.referenceView.fixedItemHeight = 25f;
+                        this.referenceView.selectedIndicesChanged += this.OnSelectedReferenceChanged;
+                        this.referenceView.itemsChosen += chosenItems =>
+                        {
+                            if (!chosenItems.Any())
+                                return;
+                            if (chosenItems.First() is UnusedProp prop)
+                            {
+                                // focusing in Project Window
+                                Selection.activeObject = prop.material;
+                                EditorGUIUtility.PingObject(prop.material);
+                            }
+                        };
+                        this.referenceView.selectionType = SelectionType.Single;
+                        this.referenceView.makeItem = () =>
+                        {
+                            var label = new Label();
+                            label.style.unityTextAlign = TextAnchor.MiddleLeft;
+                            return label;
+                        };
+                        this.referenceView.bindItem = (element, index) =>
+                        {
+                            var t = this.refEntries[index];
+                            if (element is Label label)
+                                label.text = $"   {t.groupPath ?? "No entry(Implicit asset)"} > {t.assetPath}";
+                        };
+                    }
+                    box.Add(this.referenceView);
+                    foreach (var child in box.Children())
+                        child.style.left = 10f;
+                }
+                this.optionalView.Add(box);
+            }
+            this.rootElement.Add(this.optionalView);
         }
 
         /// <summary>
@@ -172,27 +269,6 @@ namespace AddrAuditor.Editor
             this.listView.itemsSource = this.unusedProps;
             this.listView.ClearSelection();
             this.listView.Rebuild();
-        }
-
-        /// <summary>
-        /// Missingが見つかったのでリスト登録
-        /// </summary>
-        /// <param name="list">登録するリスト</param>
-        /// <param name="path">該当のアセットパス</param>
-        /// <param name="mat">該当のMaterial</param>
-        /// <param name="sp">該当のSerializedProperty</param>
-        /// <param name="index">該当のSerializedPropertyのインデックス</param>
-        /// <param name="propName">該当のプロパティ名</param>
-        static void AddUnusedList(List<UnusedProp> list, string path, Material mat, SerializedProperty sp, int index, string propName)
-        {
-            list.Add(new UnusedProp()
-            {
-                assetPath = path,
-                material = mat,
-                sp = sp,
-                propIndex = index,
-                propName = propName,
-            });
         }
     }
 }

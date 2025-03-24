@@ -20,10 +20,9 @@ namespace AddrAuditor.Editor
         readonly List<RefEntry> refEntries = new ();
 
         AnalyzeCache analyzeCache;
-        ListView listView;
+        ListView listView, referenceView;
         VisualElement optionalView;
         Label detailsLabel;
-        ListView referenceView;
         
         /// <summary>
         /// Callback when any column is selected
@@ -119,7 +118,6 @@ namespace AddrAuditor.Editor
                     header.style.unityFontStyleAndWeight = FontStyle.Bold;
                     box.Add(header);
                     this.detailsLabel = new Label("explain what is setting");
-                    this.detailsLabel.name = "itemExplanation";
                     this.detailsLabel.style.whiteSpace = WhiteSpace.Normal;
                     this.detailsLabel.text = DETAILS_MESSAGE;
                     box.Add(this.detailsLabel);
