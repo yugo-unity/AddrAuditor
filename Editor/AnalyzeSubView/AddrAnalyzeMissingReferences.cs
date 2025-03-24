@@ -55,8 +55,11 @@ namespace AddrAuditor.Editor
         {
             this.results.Clear();
             var paths = AssetDatabase.GetAllAssetPaths();
-            foreach (var path in paths)
+            //foreach (var path in paths)
+            for (var i = 0; i < paths.Length; ++i)
             {
+                var path = paths[i];
+                EditorUtility.DisplayCancelableProgressBar("Searching Missing References...", path, (float)i/paths.Length);
                 if (path.Contains("Packages"))
                     continue;
                 var o = AssetDatabase.LoadMainAssetAtPath(path);
@@ -86,6 +89,7 @@ namespace AddrAuditor.Editor
                     }
                 }
             }
+            EditorUtility.ClearProgressBar();
         }
 
         /// <summary>

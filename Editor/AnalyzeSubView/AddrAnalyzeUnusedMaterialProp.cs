@@ -99,9 +99,11 @@ namespace AddrAuditor.Editor
             var serachFolder = new string[] { "Assets", };
             var guids = AssetDatabase.FindAssets("t:Material", serachFolder);
 
-            foreach (var guid in guids)
+            for (var index = 0; index < guids.Length; ++index)
             {
+                var guid = guids[index];
                 var path = AssetDatabase.GUIDToAssetPath(guid);
+                EditorUtility.DisplayCancelableProgressBar("Searching Unused Material Properties...", path, (float)index/guids.Length);
                 var m = AssetDatabase.LoadAssetAtPath<Material>(path);
                 if (m == null || m.shader == null)
                     continue;
@@ -158,6 +160,7 @@ namespace AddrAuditor.Editor
                         unusedProp.AddList(unusedProps, colorsSp, i, propName, analyzeCache);
                 }
             }
+            EditorUtility.ClearProgressBar();
         }
 
         /// <summary>
