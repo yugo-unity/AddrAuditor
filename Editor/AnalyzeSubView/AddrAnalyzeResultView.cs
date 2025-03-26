@@ -12,12 +12,19 @@ namespace AddrAuditor.Editor
         public List<RefAssetData> refAssets;
         public List<AddressableAssetEntry> explicitEntries;
         public List<SpriteAtlasData> spriteAtlases;
+        public readonly Dictionary<string, List<RefEntry>> refEntryDic = new ();
     }
 
     internal class RefEntry
     {
         public string groupPath;
         public string assetPath;
+
+        public RefEntry(string groupPath, string assetPath)
+        {
+            groupPath = groupPath;
+            assetPath = assetPath;
+        }
     }
 
     /// <summary>
@@ -75,11 +82,12 @@ namespace AddrAuditor.Editor
         /// <param name="ret">result</param>
         /// <param name="analyzeCache">Addressable build cache</param>
         /// <param name="refAsset">explicit/implicit asset</param>
-        protected static void FindReferencedEntries(List<RefEntry> ret, AnalyzeCache analyzeCache, RefAssetData refAsset)
+        protected List<RefEntry> FindReferencedEntries(AnalyzeCache analyzeCache, RefAssetData refAsset)
         {
+            var ret = new List<RefEntry>();
             var refAssetPath = refAsset.path;
             var isSpriteInAtlas = refAsset.usedSubAssetTypes.Contains(typeof(Sprite)) && refAsset.usedSubAssetTypes.Count == 1;
-            // Spriteとしてのみ参照されているテクスチャでSpriteAtlasに含まれている場合はSpriteAtlasとして判定する
+            // Textures that is included in SpriteAtlas only referenced as Sprites are treated as SpriteAtlas
             if (isSpriteInAtlas)
             {
                 var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(refAsset.path);
@@ -93,7 +101,6 @@ namespace AddrAuditor.Editor
                 }
             }
 
-            ret.Clear();
             var entryCount = analyzeCache.explicitEntries.Count;
             for (var i = 0; i < entryCount; ++i)
             {
@@ -106,11 +113,7 @@ namespace AddrAuditor.Editor
                 {
                     if (depPath != refAssetPath)
                         continue;
-                    ret.Add(new RefEntry()
-                    {
-                        groupPath = entry.parentGroup.name,
-                        assetPath = entry.AssetPath,
-                    });
+                    ret.Add(new RefEntry(entry.parentGroup.name, entry.AssetPath));
                     break;
                 }
             }
@@ -118,24 +121,17 @@ namespace AddrAuditor.Editor
 
             if (ret.Count == 0)
             {
+                // SpriteAtlasが重複しているがSpriteAtlasがEntryにないケースは暗黙アセットであるSpriteAtlasを警告する
+                // 暗黙アセットであるSpriteAtlasを参照しているEntryを検出すると、
+                // プロジェクトによっては多数リストアップされ、本質的に何が重複アセットなのかわからなくなる懸念がある
                 if (isSpriteInAtlas)
-                {
-                    // SpriteAtlasが重複しているがSpriteAtlasがEntryにないケースは暗黙アセットであるSpriteAtlasを警告する
-                    // 暗黙アセットであるSpriteAtlasを参照しているEntryを検出すると、
-                    // プロジェクトによっては多数リストアップされ、本質的に何が重複アセットなのかわからなくなる懸念がある
-                    ret.Add(new RefEntry()
-                    {
-                        groupPath = null,
-                        assetPath = refAssetPath,
-                    });
-                }
+                    ret.Add(new RefEntry(null, refAssetPath));
                 else
-                {
                     Debug.LogError($"Unknown error, not found referenced AddressableEntry {refAsset.path}");
-                }
             }
             
             ret.Sort(CompareName);
+            return ret;
         }
         
         // sort by alphanumeric
@@ -143,7 +139,7 @@ namespace AddrAuditor.Editor
         static int CompareName(string a, string b)
         {
             var ret = string.CompareOrdinal(a, b);
-            // 桁数の違う数字を揃える
+            // align numbers that has different digits
             var regA = NUM_REGEX.Replace(a, string.Empty);
             var regB = NUM_REGEX.Replace(b, string.Empty);
             if ((regA.Length > 0 && regB.Length > 0) && regA.Length != regB.Length)

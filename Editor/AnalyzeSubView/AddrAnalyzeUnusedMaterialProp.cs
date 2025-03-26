@@ -16,7 +16,7 @@ namespace AddrAuditor.Editor
                                                  "ランタイムでShaderを切り替えるようなケースがない限り削除した方がベターです。\n" +
                                                  "なお、この解析はAddressableに関わらずプロジェクト全体に行われます。";
         
-        class UnusedProp
+        struct UnusedProp
         {
             public string guid;
             public string assetPath;
@@ -27,14 +27,15 @@ namespace AddrAuditor.Editor
             public RefAssetData refAssetData;
             bool initRefAssetData;
             
-            public void AddList(List<UnusedProp> list, SerializedProperty sp, int index, string propName, AnalyzeCache analyzeCache)
+            public void AddList(List<UnusedProp> list, SerializedProperty sp, int propIndex, string propName, AnalyzeCache analyzeCache)
             {
                 this.sp = sp;
-                this.propIndex = index;
+                this.propIndex = propIndex;
                 this.propName = propName;
                 if (this.initRefAssetData == false)
                 {
-                    this.refAssetData = analyzeCache.refAssets.Find(item => item.guid == this.guid);
+                    var temp = this.guid;
+                    this.refAssetData = analyzeCache.refAssets.Find(item => item.guid == temp);
                     this.initRefAssetData = true;
                 }
                 list.Add(this);
@@ -42,13 +43,12 @@ namespace AddrAuditor.Editor
         }
 
         public override bool requireAnalyzeCache => true;
-        readonly List<UnusedProp> unusedProps = new();
-        readonly List<RefEntry> refEntries = new ();
+        readonly List<UnusedProp> unusedProps = new ();
+        List<RefEntry> refEntries = new ();
         
         AnalyzeCache analyzeCache;
-        ListView listView, referenceView;
-        VisualElement optionalView;
-        Label detailsLabel;
+        ListView listView, referenceListView;
+        VisualElement referencedBox;
 
         /// <summary>
         /// Callback when any column is selected
@@ -62,14 +62,11 @@ namespace AddrAuditor.Editor
             if (string.IsNullOrEmpty(propData.assetPath))
                 return;
             
-            // // focusing in Project Window
-            // Selection.activeObject = propData.material;
-            // EditorGUIUtility.PingObject(propData);
-            
-            FindReferencedEntries(this.refEntries, this.analyzeCache, propData.refAssetData);
-            this.referenceView.ClearSelection();
-            this.referenceView.itemsSource = this.refEntries;
-            this.referenceView.Rebuild();
+            // focusing in Project Window
+            Selection.activeObject = propData.material;
+            EditorGUIUtility.PingObject(propData.material);
+
+            this.UpdateReferencedView();
         }
         
         void OnSelectedReferenceChanged(IEnumerable<int> selectedItems)
@@ -168,100 +165,105 @@ namespace AddrAuditor.Editor
         /// </summary>
         protected override void OnCreateView()
         {   
+            // main assets list
             this.listView = new ListView();
-            this.listView.fixedItemHeight = 25f;
-            this.listView.selectedIndicesChanged += this.OnSelectedChanged;
-            this.listView.selectionType = SelectionType.Single;
-            this.listView.makeItem = () =>
             {
-                var container = new VisualElement();
-                container.style.flexDirection = FlexDirection.Row;
-                
-                var button = new Button();
-                button.name = "itemButton";
-                button.text = "Remove";
-                container.Add(button);
-
-                var label = new Label();
-                label.name = "itemLabel";
-                label.style.unityTextAlign = TextAnchor.MiddleLeft;
-                container.Add(label);
-                
-                return container;
-            };
-            this.listView.bindItem = (element, index) =>
-            {
-                if (this.listView.itemsSource[index] is not UnusedProp t)
-                    return;
-                var label = element.Q<Label>("itemLabel");
-                label.text = $"   {t.assetPath} : {t.propName}";
-                var button = element.Q<Button>("itemButton");
-                button.clicked += () =>
+                this.listView.fixedItemHeight = 25f;
+                this.listView.selectedIndicesChanged += this.OnSelectedChanged;
+                this.listView.selectionType = SelectionType.Single;
+                this.listView.makeItem = () =>
                 {
-                    t.sp.DeleteArrayElementAtIndex(t.propIndex);
-                    t.sp.serializedObject.ApplyModifiedProperties();
-                    this.UpdateView();
+                    var container = new VisualElement();
+                    container.style.flexDirection = FlexDirection.Row;
+
+                    var button = new Button();
+                    button.name = "itemButton";
+                    button.text = "Remove";
+                    container.Add(button);
+
+                    var label = new Label();
+                    label.name = "itemLabel";
+                    label.style.unityTextAlign = TextAnchor.MiddleLeft;
+                    container.Add(label);
+
+                    return container;
                 };
-            };
+                this.listView.bindItem = (element, index) =>
+                {
+                    if (this.listView.itemsSource[index] is not UnusedProp t)
+                        return;
+                    var label = element.Q<Label>("itemLabel");
+                    label.text = $"   {t.assetPath} : {t.propName}";
+                    var button = element.Q<Button>("itemButton");
+                    button.clicked += () =>
+                    {
+                        t.sp.DeleteArrayElementAtIndex(t.propIndex);
+                        t.sp.serializedObject.ApplyModifiedProperties();
+                        this.UpdateView();
+                    };
+                };
+            }
             this.rootElement.Add(this.listView);
             
-            this.optionalView = new TwoPaneSplitView(0, 200, TwoPaneSplitViewOrientation.Vertical);
+            var optionalView = new TwoPaneSplitView(0, 100, TwoPaneSplitViewOrientation.Vertical);
             {
-                var box = new VisualElement();
+                var detailBox = new Box();
                 {
                     var header = new Label("Details");
                     header.style.unityFontStyleAndWeight = FontStyle.Bold;
-                    box.Add(header);
-                    this.detailsLabel = new Label("explain what is setting");
-                    this.detailsLabel.style.whiteSpace = WhiteSpace.Normal;
-                    this.detailsLabel.text = DETAILS_MESSAGE;
-                    box.Add(this.detailsLabel);
-                    foreach (var child in box.Children())
-                        child.style.left = 10f;
+                    header.style.left = 10f;
+                    detailBox.Add(header);
+                    var label = new Label("explain what is setting");
+                    label.style.whiteSpace = WhiteSpace.Normal;
+                    label.style.left = 10f;
+                    label.text = DETAILS_MESSAGE;
+                    detailBox.Add(label);
                 }
-                this.optionalView.Add(box);
+                optionalView.Add(detailBox);
 
-                box = new VisualElement();
+                var referenceBox = new Box();
                 {
-                    var header = new Label("Referencing Entries");
-                    header.style.unityFontStyleAndWeight = FontStyle.Bold;
-                    box.Add(header);
-                    this.referenceView = new ListView();
+                    this.referenceListView = new ListView();
                     {
-                        this.referenceView.fixedItemHeight = 25f;
-                        this.referenceView.selectedIndicesChanged += this.OnSelectedReferenceChanged;
-                        this.referenceView.itemsChosen += chosenItems =>
-                        {
-                            if (!chosenItems.Any())
-                                return;
-                            if (chosenItems.First() is UnusedProp prop)
-                            {
-                                // focusing in Project Window
-                                Selection.activeObject = prop.material;
-                                EditorGUIUtility.PingObject(prop.material);
-                            }
-                        };
-                        this.referenceView.selectionType = SelectionType.Single;
-                        this.referenceView.makeItem = () =>
+                        this.referenceListView.fixedItemHeight = 25f;
+                        this.referenceListView.selectedIndicesChanged += this.OnSelectedReferenceChanged;
+                        this.referenceListView.selectionType = SelectionType.Single;
+                        this.referenceListView.makeItem = () =>
                         {
                             var label = new Label();
                             label.style.unityTextAlign = TextAnchor.MiddleLeft;
                             return label;
                         };
-                        this.referenceView.bindItem = (element, index) =>
+                        this.referenceListView.bindItem = (element, index) =>
                         {
                             var t = this.refEntries[index];
                             if (element is Label label)
                                 label.text = $"   {t.groupPath ?? "No entry(Implicit asset)"} > {t.assetPath}";
                         };
                     }
-                    box.Add(this.referenceView);
-                    foreach (var child in box.Children())
-                        child.style.left = 10f;
+                    this.referenceListView.style.left = 10f;
+                    
+                    var header = new Label("Referencing Entries")
+                    {
+                        style =
+                        {
+                            unityFontStyleAndWeight = FontStyle.Bold,
+                            left = 10f,
+                            alignSelf = Align.FlexStart
+                        }
+                    };
+                    referenceBox.Add(header);
+                    this.referencedBox = new VisualElement();
+                    this.referencedBox.style.flexGrow = 1;
+                    this.referencedBox.style.flexDirection = FlexDirection.Column;
+                    this.referencedBox.style.alignItems = Align.Stretch;
+                    referenceBox.Add(this.referencedBox);
+                    
+                    this.UpdateReferencedView();
                 }
-                this.optionalView.Add(box);
+                optionalView.Add(referenceBox);
             }
-            this.rootElement.Add(this.optionalView);
+            this.rootElement.Add(optionalView);
         }
 
         /// <summary>
@@ -272,6 +274,71 @@ namespace AddrAuditor.Editor
             this.listView.itemsSource = this.unusedProps;
             this.listView.ClearSelection();
             this.listView.Rebuild();
+        }
+
+        /// <summary>
+        /// update view for referenced entries
+        /// </summary>
+        void UpdateReferencedView()
+        {
+            this.referencedBox.Clear();
+            
+            var index = this.listView.selectedIndex;
+            if (index >= 0 && this.analyzeCache.refEntryDic.TryGetValue(this.unusedProps[index].guid, out var referencedEntries))
+            {
+                this.UpdateReferencedList(referencedEntries);
+            }
+            else
+            {
+                var topSpacer = new VisualElement();
+                topSpacer.style.flexGrow = 1;
+                this.referencedBox.Add(topSpacer);
+
+                var button = new Button
+                {
+                    text = "Find Referenced Assets",
+                    style =
+                    {
+                        alignSelf = Align.Center,
+                        width = 200f,
+                        height = 60f
+                    }
+                };
+                if (index < 0)
+                {
+                    button.style.opacity = 0.5f;
+                }
+                else
+                {
+                    button.clicked += () =>
+                    {
+                        var dup = this.unusedProps[index].refAssetData;
+                        var entriesCache = FindReferencedEntries(this.analyzeCache, dup);
+                        this.analyzeCache.refEntryDic.Add(dup.guid, entriesCache);
+                        this.UpdateReferencedList(entriesCache);
+                    };
+                }
+                this.referencedBox.Add(button);
+
+                var bottomSpacer = new VisualElement();
+                bottomSpacer.style.flexGrow = 1;
+                this.referencedBox.Add(bottomSpacer);
+            }
+        }
+
+        /// <summary>
+        /// update referenced entries list
+        /// </summary>
+        /// <param name="entries">referenced entries</param>
+        void UpdateReferencedList(List<RefEntry> entries)
+        {
+            this.refEntries = entries;
+            this.referencedBox.Clear();
+            this.referenceListView.ClearSelection();
+            this.referenceListView.itemsSource = entries;
+            this.referenceListView.Rebuild();
+            this.referencedBox.style.alignSelf = Align.Auto;
+            this.referencedBox.Add(this.referenceListView);
         }
     }
 }

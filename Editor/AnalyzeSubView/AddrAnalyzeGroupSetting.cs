@@ -10,6 +10,8 @@ namespace AddrAuditor.Editor
 {
     class AnalyzeViewGroupSetting : ResultView
     {
+        const int WARN_ASSET_COUNT_THRESHOLD = 128;
+        
         enum ANALYZED_ITEM
         {
             USE_DEFAULT,
@@ -31,13 +33,11 @@ namespace AddrAuditor.Editor
             "Asset Bundle CRC",
             "Bundle Naming Mode",
             "Include XXX in Catalog",
-            "Internal Asset Naming Mode", // 親の設定を継承してDynamic推奨だがSceneの場合のみ注意喚起
+            "Internal Asset Naming Mode",
             "Bundle Mode",
-
-            "Inclue in Build", // 無効の時にビルドに含まれないのは正しいがの注意喚起
+            "Inclue in Build",
         };
         
-        // TODO: purge to json file or csv or anything, and support English
         static readonly string[] ITEM_DETAILS = new string[(int)ANALYZED_ITEM.MAX]
         {
             // USE_DEFAULT
@@ -129,8 +129,8 @@ namespace AddrAuditor.Editor
                         }
                     }
                 }
-                // 著しくEntryが多い場合に判定
-                if (group.entries.Count > 128)
+                // Warning when many entries in the Group
+                if (group.entries.Count > WARN_ASSET_COUNT_THRESHOLD)
                 {
                     if (!group.name.Contains(AddrAutoGrouping.SHARED_GROUP_NAME) && !group.name.Contains(AddrAutoGrouping.RESIDENT_GROUP_NAME))
                         this.recommendItems.Add(new RecommendItem(group, ANALYZED_ITEM.BUNDLE_MODE));
@@ -176,16 +176,17 @@ namespace AddrAuditor.Editor
                     label.text = $"   {item.group.name} > {item.category}";
             };
             this.rootElement.Add(this.listView);
-            
-            var box = new VisualElement();
-            var header = new Label("Details");
-            header.style.unityFontStyleAndWeight = FontStyle.Bold;
-            box.Add(header);
-            this.recommendationLabel = new Label();
-            this.recommendationLabel.style.whiteSpace = WhiteSpace.Normal;
-            box.Add(this.recommendationLabel);
-            foreach (var child in box.Children())
-                child.style.left = 10f;
+
+            var box = new Box();
+            {
+                var header = new Label("Details");
+                header.style.unityFontStyleAndWeight = FontStyle.Bold;
+                header.style.left = 10f;
+                box.Add(header);
+                this.recommendationLabel = new Label();
+                this.recommendationLabel.style.whiteSpace = WhiteSpace.Normal;
+                box.Add(this.recommendationLabel);
+            }
             this.rootElement.Add(box);
         }
 

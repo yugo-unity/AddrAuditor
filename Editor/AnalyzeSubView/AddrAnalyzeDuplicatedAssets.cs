@@ -17,12 +17,11 @@ namespace AddrAuditor.Editor
 
         public override bool requireAnalyzeCache => true;
         readonly List<RefAssetData> duplications = new ();
-        readonly List<RefEntry> refEntries = new ();
+        List<RefEntry> refEntries = new ();
 
         AnalyzeCache analyzeCache;
-        ListView listView, referenceView;
-        VisualElement optionalView;
-        Label detailsLabel;
+        ListView listView, refentryListView;
+        VisualElement referencedRoot;
         
         /// <summary>
         /// Callback when any column is selected
@@ -36,18 +35,15 @@ namespace AddrAuditor.Editor
             if (string.IsNullOrEmpty(dup.path))
                 return;
             
-            // // focusing in Project Window
-            // var obj = AssetDatabase.LoadMainAssetAtPath(dup.path);
-            // Selection.activeObject = obj;
-            // EditorGUIUtility.PingObject(obj);
-            
-            FindReferencedEntries(this.refEntries, this.analyzeCache, dup);
-            this.referenceView.ClearSelection();
-            this.referenceView.itemsSource = this.refEntries;
-            this.referenceView.Rebuild();
+            // focusing in Project Window
+            var obj = AssetDatabase.LoadMainAssetAtPath(dup.path);
+            Selection.activeObject = obj;
+            EditorGUIUtility.PingObject(obj);
+
+            this.UpdateReferencedView();
         }
         
-        void OnSelectedReferenceChanged(IEnumerable<int> selectedItems)
+        void OnSelectedRefentryListChanged(IEnumerable<int> selectedItems)
         {
             if (!selectedItems.Any())
                 return;
@@ -77,6 +73,7 @@ namespace AddrAuditor.Editor
         /// </summary>
         protected override void OnCreateView()
         {
+            // main assets list
             this.listView = new ListView();
             {
                 this.listView.fixedItemHeight = 30f;
@@ -110,64 +107,68 @@ namespace AddrAuditor.Editor
             }
             this.rootElement.Add(this.listView);
 
-            this.optionalView = new TwoPaneSplitView(0, 200, TwoPaneSplitViewOrientation.Vertical);
+            // right side view
+            var optionalView = new TwoPaneSplitView(0, 100, TwoPaneSplitViewOrientation.Vertical);
             {
-                var box = new VisualElement();
+                var box = new Box();
                 {
                     var header = new Label("Details");
                     header.style.unityFontStyleAndWeight = FontStyle.Bold;
+                    header.style.left = 10f;
                     box.Add(header);
-                    this.detailsLabel = new Label("explain what is setting");
-                    this.detailsLabel.style.whiteSpace = WhiteSpace.Normal;
-                    this.detailsLabel.text = DETAILS_MESSAGE;
-                    box.Add(this.detailsLabel);
-                    foreach (var child in box.Children())
-                        child.style.left = 10f;
+                    
+                    var label = new Label("explain what is setting");
+                    label.style.whiteSpace = WhiteSpace.Normal;
+                    label.style.left = 10f;
+                    label.style.height = 200f;
+                    label.text = DETAILS_MESSAGE;
+                    box.Add(label);
                 }
-                this.optionalView.Add(box);
+                optionalView.Add(box);
 
-                box = new VisualElement();
+                var referencedBox = new Box();
                 {
-                    var header = new Label("Referencing Entries");
-                    header.style.unityFontStyleAndWeight = FontStyle.Bold;
-                    box.Add(header);
-                    this.referenceView = new ListView();
+                    this.refentryListView = new ListView();
                     {
-                        this.referenceView.fixedItemHeight = 25f;
-                        this.referenceView.selectedIndicesChanged += this.OnSelectedReferenceChanged;
-                        this.referenceView.itemsChosen += chosenItems =>
-                        {
-                            if (!chosenItems.Any())
-                                return;
-                            if (chosenItems.First() is RefEntry refEntry)
-                            {
-                                // focusing in Project Window
-                                var obj = AssetDatabase.LoadMainAssetAtPath(refEntry.assetPath);
-                                Selection.activeObject = obj;
-                                EditorGUIUtility.PingObject(obj);
-                            }
-                        };
-                        this.referenceView.selectionType = SelectionType.Single;
-                        this.referenceView.makeItem = () =>
+                        this.refentryListView.fixedItemHeight = 25f;
+                        this.refentryListView.selectedIndicesChanged += this.OnSelectedRefentryListChanged;
+                        this.refentryListView.selectionType = SelectionType.Single;
+                        this.refentryListView.makeItem = () =>
                         {
                             var label = new Label();
                             label.style.unityTextAlign = TextAnchor.MiddleLeft;
                             return label;
                         };
-                        this.referenceView.bindItem = (element, index) =>
+                        this.refentryListView.bindItem = (element, index) =>
                         {
                             var t = this.refEntries[index];
                             if (element is Label label)
                                 label.text = $"   {t.groupPath ?? "No entry(Implicit asset)"} > {t.assetPath}";
                         };
                     }
-                    box.Add(this.referenceView);
-                    foreach (var child in box.Children())
-                        child.style.left = 10f;
+                    this.refentryListView.style.left = 10f;
+            
+                    var header = new Label("Referencing Entries")
+                    {
+                        style =
+                        {
+                            unityFontStyleAndWeight = FontStyle.Bold,
+                            left = 10f,
+                            alignSelf = Align.FlexStart
+                        }
+                    };
+                    referencedBox.Add(header);
+                    this.referencedRoot = new VisualElement();
+                    this.referencedRoot.style.flexGrow = 1;
+                    this.referencedRoot.style.flexDirection = FlexDirection.Column;
+                    this.referencedRoot.style.alignItems = Align.Stretch;
+                    referencedBox.Add(this.referencedRoot);
+                    
+                    this.UpdateReferencedView();
                 }
-                this.optionalView.Add(box);
+                optionalView.Add(referencedBox);
             }
-            this.rootElement.Add(this.optionalView);
+            this.rootElement.Add(optionalView);
         }
 
         /// <summary>
@@ -178,6 +179,71 @@ namespace AddrAuditor.Editor
             this.listView.ClearSelection();
             this.listView.itemsSource = this.duplications;
             this.listView.Rebuild();
+        }
+
+        /// <summary>
+        /// update view for referenced entries
+        /// </summary>
+        void UpdateReferencedView()
+        {
+            this.referencedRoot.Clear();
+            
+            var index = this.listView.selectedIndex;
+            if (index >= 0 && this.analyzeCache.refEntryDic.TryGetValue(this.duplications[index].guid, out var referencedEntries))
+            {
+                this.UpdateReferencedList(referencedEntries);
+            }
+            else
+            {
+                var topSpacer = new VisualElement();
+                topSpacer.style.flexGrow = 1;
+                this.referencedRoot.Add(topSpacer);
+
+                var button = new Button
+                {
+                    text = "Find Referenced Assets",
+                    style =
+                    {
+                        alignSelf = Align.Center,
+                        width = 200f,
+                        height = 60f
+                    }
+                };
+                if (index < 0)
+                {
+                    button.style.opacity = 0.5f;
+                }
+                else
+                {
+                    button.clicked += () =>
+                    {
+                        var dup = this.duplications[index];
+                        var entriesCache = FindReferencedEntries(this.analyzeCache, dup);
+                        this.analyzeCache.refEntryDic.Add(dup.guid, entriesCache);
+                        this.UpdateReferencedList(entriesCache);
+                    };
+                }
+                this.referencedRoot.Add(button);
+
+                var bottomSpacer = new VisualElement();
+                bottomSpacer.style.flexGrow = 1;
+                this.referencedRoot.Add(bottomSpacer);
+            }
+        }
+
+        /// <summary>
+        /// update referenced entries list
+        /// </summary>
+        /// <param name="entries">referenced entries</param>
+        void UpdateReferencedList(List<RefEntry> entries)
+        {
+            this.refEntries = entries;
+            this.referencedRoot.Clear();
+            this.refentryListView.ClearSelection();
+            this.refentryListView.itemsSource = entries;
+            this.refentryListView.Rebuild();
+            this.referencedRoot.style.alignSelf = Align.Auto;
+            this.referencedRoot.Add(this.refentryListView);
         }
     }
 }

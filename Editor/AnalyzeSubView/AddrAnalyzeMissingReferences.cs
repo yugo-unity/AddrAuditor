@@ -19,6 +19,12 @@ namespace AddrAuditor.Editor
         {
             public string assetPath;
             public string gameObjectPath;
+
+            public MissingAsset(string assetPath, string gameObjectPath)
+            {
+                assetPath = assetPath;
+                gameObjectPath = gameObjectPath;
+            }
         }
 
         readonly List<MissingAsset> results = new();
@@ -97,42 +103,48 @@ namespace AddrAuditor.Editor
         /// </summary>
         protected override void OnCreateView()
         {
-            var box = new VisualElement();
-            var header = new Label("Details");
-            header.style.unityFontStyleAndWeight = FontStyle.Bold;
-            box.Add(header);
-            this.detailsLabel = new Label("explain what is setting");
-            this.detailsLabel.style.whiteSpace = WhiteSpace.Normal;
-            this.detailsLabel.text = DETAILS_MESSAGE;
-            box.Add(this.detailsLabel);
-            foreach (var child in box.Children())
-                child.style.left = 10f;
+            var box = new Box();
+            {
+                var header = new Label("Details");
+                header.style.unityFontStyleAndWeight = FontStyle.Bold;
+                box.Add(header);
+                this.detailsLabel = new Label("explain what is setting");
+                this.detailsLabel.style.whiteSpace = WhiteSpace.Normal;
+                this.detailsLabel.text = DETAILS_MESSAGE;
+                box.Add(this.detailsLabel);
+                foreach (var child in box.Children())
+                    child.style.left = 10f;
+            }
             this.rootElement.Add(box);
             
-            this.listView = new ListView();
-            this.listView.fixedItemHeight = 25f;
-            this.listView.selectedIndicesChanged += this.OnSelectedChanged;
-            this.listView.selectionType = SelectionType.Single;
-            this.listView.makeItem = () =>
+            box = new Box();
             {
-                var label = new Label();
-                label.style.unityTextAlign = TextAnchor.MiddleLeft;
-                return label;
-            };
-            this.listView.bindItem = (element, index) =>
-            {
-                if (this.listView.itemsSource is List<string> missingPath)
+                this.listView = new ListView();
+                this.listView.fixedItemHeight = 25f;
+                this.listView.selectedIndicesChanged += this.OnSelectedChanged;
+                this.listView.selectionType = SelectionType.Single;
+                this.listView.makeItem = () =>
                 {
-                    if (element is Label label)
-                        label.text = missingPath[index] ?? "Null Object";
-                    // backgroundColorを設定するとselected Colorが設定できない（cssを要求される）
-                    // if (index % 2 == 0)
-                    //     element.style.backgroundColor = new StyleColor(new Color(0.24f, 0.24f, 0.24f));
-                    // else
-                    //     element.style.backgroundColor = new StyleColor(new Color(0.21f, 0.21f, 0.21f));
-                }
-            };
-            this.rootElement.Add(this.listView);
+                    var label = new Label();
+                    label.style.unityTextAlign = TextAnchor.MiddleLeft;
+                    return label;
+                };
+                this.listView.bindItem = (element, index) =>
+                {
+                    if (this.listView.itemsSource is List<string> missingPath)
+                    {
+                        if (element is Label label)
+                            label.text = missingPath[index] ?? "Null Object";
+                        // lost selected color when setting backgroundColor（css is required if we want）
+                        // if (index % 2 == 0)
+                        //     element.style.backgroundColor = new StyleColor(new Color(0.24f, 0.24f, 0.24f));
+                        // else
+                        //     element.style.backgroundColor = new StyleColor(new Color(0.21f, 0.21f, 0.21f));
+                    }
+                };
+                box.Add(this.listView);
+            }
+            this.rootElement.Add(box);
         }
 
         /// <summary>
@@ -149,24 +161,24 @@ namespace AddrAuditor.Editor
         }
 
         /// <summary>
-        /// Missing参照を掘り出す
+        /// find Missing References recursively
         /// </summary>
-        /// <param name="missingList">検出結果</param>
-        /// <param name="assetPath">調べてるアセットのファイルパス</param>
-        /// <param name="objPath">調べてるオブジェクトの階層パス</param>
-        /// <param name="gameObject">調べるGameObject</param>
-        static void DigMissingComponents(List<MissingAsset> missingList, string assetPath, string objPath, GameObject gameObject)
+        /// <param name="results">results</param>
+        /// <param name="assetPath">file path for selected asset</param>
+        /// <param name="objPath">gameobject path for selected object</param>
+        /// <param name="gameObject">selected object</param>
+        static void DigMissingComponents(List<MissingAsset> results, string assetPath, string objPath, GameObject gameObject)
         {
-            // 現在のGameObjectにアタッチされているコンポーネントの確認
+            // check components in current gameobject
             var components = gameObject.GetComponents<Component>();
             foreach (var component in components)
             {
                 if (component != null)
                     continue;
-                AddMissingList(missingList, assetPath, objPath);
+                results.Add(new MissingAsset(assetPath, objPath));
             }
 
-            // 子のGameObjectを再帰的に検索
+            // check children
             var transform = gameObject.transform;
             for (var c = 0; c < transform.childCount; c++)
             {
@@ -174,26 +186,10 @@ namespace AddrAuditor.Editor
                 var pt = PrefabUtility.GetPrefabAssetType(t.gameObject);
                 var nextObjPath = $"{objPath}/{t.name}";
                 if (pt == PrefabAssetType.MissingAsset)
-                    AddMissingList(missingList, assetPath, nextObjPath);
+                    results.Add(new MissingAsset(assetPath, objPath));
                 else
-                    DigMissingComponents(missingList, assetPath, nextObjPath, t.gameObject);
+                    DigMissingComponents(results, assetPath, nextObjPath, t.gameObject);
             }
-        }
-
-        /// <summary>
-        /// Missingが見つかったのでリスト登録
-        /// </summary>
-        /// <param name="list">登録するリスト</param>
-        /// <param name="path">該当のアセットパス</param>
-        /// <param name="objPath">該当のGameObjectパス</param>
-        /// <param name="obj">該当のGameObject</param>
-        static void AddMissingList(List<MissingAsset> list, string path, string objPath)
-        {
-            list.Add(new MissingAsset()
-            {
-                assetPath = path,
-                gameObjectPath = objPath,
-            });
         }
     }
 }

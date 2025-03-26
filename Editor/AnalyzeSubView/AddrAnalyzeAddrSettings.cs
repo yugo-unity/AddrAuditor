@@ -41,7 +41,6 @@ namespace AddrAuditor.Editor
             "Disable Visible Sub Asset Representations",
         };
 
-        // TODO: purge to json file or csv or anything, and support English
         static readonly string[] ITEM_DETAILS = new string[(int)ANALYZED_ITEM.MAX]
         {
             // LOG_RUNTIME_EXCEPTION
@@ -173,15 +172,16 @@ namespace AddrAuditor.Editor
             };
             this.rootElement.Add(this.listView);
             
-            var box = new VisualElement();
-            var header = new Label("Details");
-            header.style.unityFontStyleAndWeight = FontStyle.Bold;
-            box.Add(header);
-            this.recommendationLabel = new Label();
-            this.recommendationLabel.style.whiteSpace = WhiteSpace.Normal;
-            box.Add(this.recommendationLabel);
-            foreach (var child in box.Children())
-                child.style.left = 10f;
+            var box = new Box();
+            {
+                var header = new Label("Details");
+                header.style.unityFontStyleAndWeight = FontStyle.Bold;
+                header.style.left = 10f;
+                box.Add(header);
+                this.recommendationLabel = new Label();
+                this.recommendationLabel.style.whiteSpace = WhiteSpace.Normal;
+                box.Add(this.recommendationLabel);
+            }
             this.rootElement.Add(box);
         }
 

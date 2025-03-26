@@ -34,11 +34,10 @@ namespace AddrAuditor.Editor
             "   Missing Asset References in Project",
         };
         
-        ResultView[] subCategories = new ResultView[MAIN_CATEGORIES.Length];
-        TwoPaneSplitView mainSplitView;
-        VisualElement rightPane;
+        readonly ResultView[] subCategories = new ResultView[MAIN_CATEGORIES.Length];
+        VisualElement subViewRoot;
         int currentCategory;
-        AnalyzeCache analyzeCache;
+        AnalyzeCache analyzeCache = new AnalyzeCache();
         
         /// <summary>
         /// Build Editor-Window
@@ -46,6 +45,11 @@ namespace AddrAuditor.Editor
         void CreateGUI()
         {
             AddrUtility.ReloadInternalAPI();
+            
+            this.analyzeCache = new AnalyzeCache()
+            {
+                addrSetting = AddressableAssetSettingsDefaultObject.Settings,
+            };
             
             var root = this.rootVisualElement;
             
@@ -68,6 +72,7 @@ namespace AddrAuditor.Editor
                         this.analyzeCache.refAssets = null;
                         this.analyzeCache.explicitEntries = null;
                         this.analyzeCache.spriteAtlases = null;
+                        this.analyzeCache.refEntryDic.Clear();
                         this.CreateSubViews();
                         this.UpdateSubView(this.currentCategory);
                     };
@@ -104,7 +109,7 @@ namespace AddrAuditor.Editor
             }
             root.Add(header);
 
-            this.mainSplitView = new TwoPaneSplitView(0, 240, TwoPaneSplitViewOrientation.Horizontal);
+            var mainSplitView = new TwoPaneSplitView(0, 240, TwoPaneSplitViewOrientation.Horizontal);
             {
                 var categories = new ListView(MAIN_CATEGORIES);
                 {
@@ -126,12 +131,12 @@ namespace AddrAuditor.Editor
                         this.UpdateSubView(index);
                     };
                 }
-                this.mainSplitView.Add(categories);
+                mainSplitView.Add(categories);
 
-                this.rightPane = new Box();
-                this.mainSplitView.Add(this.rightPane);
+                this.subViewRoot = new Box();
+                mainSplitView.Add(this.subViewRoot);
             }
-            root.Add(this.mainSplitView);
+            root.Add(mainSplitView);
 
             this.CreateSubViews();
             this.UpdateSubView(0);
@@ -142,19 +147,11 @@ namespace AddrAuditor.Editor
         /// </summary>
         void CreateAnalyzeCache(bool buildCache)
         {
-            var setting = AddressableAssetSettingsDefaultObject.Settings;
-            if (this.analyzeCache == null)
-            {
-                this.analyzeCache = new AnalyzeCache()
-                {
-                    addrSetting = setting,
-                };
-            }
-
             if (buildCache)
             {
                 if (this.analyzeCache.refAssets == null)
                 {
+                    var setting = this.analyzeCache.addrSetting;
                     var (refAssets, spAtlases) = AddrAutoGrouping.CollectReferencedAssetInfo(setting, null, false);
                     var entries = new List<AddressableAssetEntry>();
                     foreach (var t in setting.groups)
@@ -184,8 +181,8 @@ namespace AddrAuditor.Editor
         {
             this.currentCategory = categoryIndex;
             this.subCategories[categoryIndex].UpdateView();
-            this.rightPane.Clear();
-            this.rightPane.Add(this.subCategories[categoryIndex].rootElement);
+            this.subViewRoot.Clear();
+            this.subViewRoot.Add(this.subCategories[categoryIndex].rootElement);
         }
         
         /// <summary>
