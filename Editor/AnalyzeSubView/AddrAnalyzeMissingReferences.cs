@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEngine.SceneManagement;
@@ -27,7 +28,7 @@ namespace AddrAuditor.Editor
             }
         }
 
-        readonly List<MissingAsset> results = new();
+        readonly List<MissingAsset> missingAssets = new();
         ListView listView;
         Label detailsLabel;
         
@@ -39,12 +40,12 @@ namespace AddrAuditor.Editor
             if (selectedItems is not List<int> indexList || indexList.Count == 0)
                 return;
             var index = indexList[0];
-            var ret = this.results[index];
+            var ret = this.missingAssets[index];
             if (string.IsNullOrEmpty(ret.assetPath))
                 return;
             Object obj = null;
             var activeScene = SceneManager.GetActiveScene(); 
-            // Project Windowでフォーカスさせる
+            // focusing in Project Window
             if (activeScene.path != ret.assetPath)
                 obj = AssetDatabase.LoadAssetAtPath(ret.assetPath, typeof(Object));
             else
@@ -59,7 +60,7 @@ namespace AddrAuditor.Editor
         /// <param name="cache">build cache that created by AddrAnalyzeWindow</param>
         public override void Analyze(AnalyzeCache cache)
         {
-            this.results.Clear();
+            this.missingAssets.Clear();
             var paths = AssetDatabase.GetAllAssetPaths();
             //foreach (var path in paths)
             for (var i = 0; i < paths.Length; ++i)
@@ -72,7 +73,7 @@ namespace AddrAuditor.Editor
                 switch (o)
                 {
                     case GameObject go:
-                        DigMissingComponents(results, path, go.name, go);
+                        DigMissingComponents(missingAssets, path, go.name, go);
                         break;
                     case SceneAsset:
                     {
@@ -87,7 +88,7 @@ namespace AddrAuditor.Editor
                         {
                             var gameObjects = scene.GetRootGameObjects();
                             foreach (var go in gameObjects)
-                                DigMissingComponents(results, path, go.name, go);   
+                                DigMissingComponents(missingAssets, path, go.name, go);   
                         }
                         if (needToUnload)
                             EditorSceneManager.CloseScene(scene, true);
@@ -122,6 +123,23 @@ namespace AddrAuditor.Editor
                 this.listView = new ListView();
                 this.listView.fixedItemHeight = 25f;
                 this.listView.selectedIndicesChanged += this.OnSelectedChanged;
+                this.listView.itemsChosen += chosenItems =>
+                {
+                    if (!chosenItems.Any())
+                        return;
+                    if (chosenItems.First() is MissingAsset missingAsset)
+                    {
+                        // focusing in Project Window
+                        Object obj = null;
+                        var activeScene = SceneManager.GetActiveScene(); 
+                        if (activeScene.path != missingAsset.assetPath)
+                            obj = AssetDatabase.LoadAssetAtPath(missingAsset.assetPath, typeof(Object));
+                        else
+                            obj = GameObject.Find(missingAsset.gameObjectPath);
+                        Selection.activeObject = obj;
+                        EditorGUIUtility.PingObject(obj);
+                    }
+                };
                 this.listView.selectionType = SelectionType.Single;
                 this.listView.makeItem = () =>
                 {
@@ -131,16 +149,14 @@ namespace AddrAuditor.Editor
                 };
                 this.listView.bindItem = (element, index) =>
                 {
-                    if (this.listView.itemsSource is List<string> missingPath)
-                    {
-                        if (element is Label label)
-                            label.text = missingPath[index] ?? "Null Object";
-                        // lost selected color when setting backgroundColor（css is required if we want）
-                        // if (index % 2 == 0)
-                        //     element.style.backgroundColor = new StyleColor(new Color(0.24f, 0.24f, 0.24f));
-                        // else
-                        //     element.style.backgroundColor = new StyleColor(new Color(0.21f, 0.21f, 0.21f));
-                    }
+                    var t = this.missingAssets[index];
+                    if (element is Label label)
+                        label.text = $"   {t.assetPath} : {t.gameObjectPath}";
+                    // lost selected color when setting backgroundColor（css is required if we want）
+                    // if (index % 2 == 0)
+                    //     element.style.backgroundColor = new StyleColor(new Color(0.24f, 0.24f, 0.24f));
+                    // else
+                    //     element.style.backgroundColor = new StyleColor(new Color(0.21f, 0.21f, 0.21f));
                 };
                 box.Add(this.listView);
             }
@@ -152,11 +168,8 @@ namespace AddrAuditor.Editor
         /// </summary>
         public override void UpdateView()
         {
-            var labels = new List<string>(this.results.Count);
-            foreach (var t in this.results)
-                labels.Add($"   {t.assetPath} : {t.gameObjectPath}");
             this.listView.ClearSelection();
-            this.listView.itemsSource = labels;
+            this.listView.itemsSource = this.missingAssets;
             this.listView.Rebuild();
         }
 

@@ -170,6 +170,17 @@ namespace AddrAuditor.Editor
             {
                 this.listView.fixedItemHeight = 25f;
                 this.listView.selectedIndicesChanged += this.OnSelectedChanged;
+                this.listView.itemsChosen += chosenItems =>
+                {
+                    if (!chosenItems.Any())
+                        return;
+                    if (chosenItems.First() is UnusedProp propData)
+                    {
+                        // focusing in Project Window
+                        Selection.activeObject = propData.material;
+                        EditorGUIUtility.PingObject(propData.material);
+                    }
+                };
                 this.listView.selectionType = SelectionType.Single;
                 this.listView.makeItem = () =>
                 {

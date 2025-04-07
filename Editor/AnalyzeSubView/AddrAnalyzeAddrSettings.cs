@@ -104,6 +104,10 @@ namespace AddrAuditor.Editor
                 return;
             var index = indexList[0];
             this.recommendationLabel.text = this.recommendItems[index].recommend;
+            
+            // focusing in Project Window
+            Selection.activeObject = this.settings;
+            EditorGUIUtility.PingObject(this.settings);
         }
 
         /// <summary>
