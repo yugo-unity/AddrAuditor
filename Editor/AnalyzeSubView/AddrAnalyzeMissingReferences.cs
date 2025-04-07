@@ -22,8 +22,8 @@ namespace AddrAuditor.Editor
 
             public MissingAsset(string assetPath, string gameObjectPath)
             {
-                assetPath = assetPath;
-                gameObjectPath = gameObjectPath;
+                this.assetPath = assetPath;
+                this.gameObjectPath = gameObjectPath;
             }
         }
 
@@ -152,8 +152,8 @@ namespace AddrAuditor.Editor
         /// </summary>
         public override void UpdateView()
         {
-            var labels = new List<string>(results.Count);
-            foreach (var t in results)
+            var labels = new List<string>(this.results.Count);
+            foreach (var t in this.results)
                 labels.Add($"   {t.assetPath} : {t.gameObjectPath}");
             this.listView.ClearSelection();
             this.listView.itemsSource = labels;

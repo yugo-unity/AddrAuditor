@@ -22,8 +22,8 @@ namespace AddrAuditor.Editor
 
         public RefEntry(string groupPath, string assetPath)
         {
-            groupPath = groupPath;
-            assetPath = assetPath;
+            this.groupPath = groupPath;
+            this.assetPath = assetPath;
         }
     }
 
