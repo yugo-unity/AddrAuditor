@@ -32,12 +32,13 @@ namespace AddrAuditor.Editor
     /// </summary>
     internal abstract class ResultView
     {
+        protected const float REF_VIEW_DETAIL_HEIGHT = 160f;
         public VisualElement rootElement { get; private set; }
         public virtual bool requireAnalyzeCache => false;
 
         public void CreateView(TwoPaneSplitViewOrientation orientation)
         {
-            var dimension = orientation == TwoPaneSplitViewOrientation.Horizontal ? 580 : 70;
+            var dimension = orientation == TwoPaneSplitViewOrientation.Horizontal ? 580 : 120;
             var root = new TwoPaneSplitView(0, dimension, orientation);
             this.rootElement = root;
             this.OnCreateView();

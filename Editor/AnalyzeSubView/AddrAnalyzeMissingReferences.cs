@@ -13,8 +13,13 @@ namespace AddrAuditor.Editor
     /// </summary>
     class AnalyzeViewMissingReferences : ResultView
     {
-        static readonly string DETAILS_MESSAGE = "Missingになっているアセット参照をもつComponentを検出します。該当オブジェクトを確認し、適切に処理してください。\n" +
-                                                 "なお、この解析はAddressableに関わらずプロジェクト全体に行われます。";
+        static readonly string DETAILS_MESSAGE = "Missingになっているアセット参照をもつComponentを検出します。" +
+                                                 "検出された場合、該当オブジェクトを適切に処理してください。\n" +
+                                                 "なお、この解析はAddressableに関わらずプロジェクト全体に行われます。\n" +
+                                                 "\n" +
+                                                 "This will detect components that have missing asset references.\n" +
+                                                 "If any are found, please process the relevant objects appropriately.\n" +
+                                                 "Note: this analysis is performed on the entire project, regardless of Addressable.";
         
         class MissingAsset
         {
@@ -108,13 +113,13 @@ namespace AddrAuditor.Editor
             {
                 var header = new Label("Details");
                 header.style.unityFontStyleAndWeight = FontStyle.Bold;
+                header.style.left = 10f;
                 box.Add(header);
                 this.detailsLabel = new Label("explain what is setting");
                 this.detailsLabel.style.whiteSpace = WhiteSpace.Normal;
+                this.detailsLabel.style.left = 10f;
                 this.detailsLabel.text = DETAILS_MESSAGE;
                 box.Add(this.detailsLabel);
-                foreach (var child in box.Children())
-                    child.style.left = 10f;
             }
             this.rootElement.Add(box);
             

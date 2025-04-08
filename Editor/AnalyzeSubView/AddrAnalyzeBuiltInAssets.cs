@@ -12,9 +12,11 @@ namespace AddrAuditor.Editor
     /// </summary>
     class AnalyzeViewBuiltInAssets : ResultView
     {
-        static readonly string DETAILS_MESSAGE = "Built-inとAssetBundleで重複して含まれているアセットを検出します。\n" +
-                                                 "Built-inには極力アセットを含めないよう適切に対応してください。\n" +
-                                                 "またBuilt-inでしか利用しないアセットをAddressableに登録していないか確認してください。";
+        static readonly string DETAILS_MESSAGE = "Built-inとAssetBundleで重複して含まれているアセットを検出します。\n" + 
+                                                 "またBuilt-inでしか利用しないアセットをAddressableに登録していないか確認してください。\n" +
+                                                 "\n" +
+                                                 "Detecting assets that are included in duplicate in Built-in and AssetBundle.\n" +
+                                                 "Also, it will be better to check whether any assets used in Built-in only have not been registered in Addressable.";
             
         struct DuplicateAsset
         {
@@ -187,7 +189,7 @@ namespace AddrAuditor.Editor
             }
             this.rootElement.Add(this.listView);
 
-            var optionalView = new TwoPaneSplitView(0, 100, TwoPaneSplitViewOrientation.Vertical);
+            var optionalView = new TwoPaneSplitView(0, REF_VIEW_DETAIL_HEIGHT, TwoPaneSplitViewOrientation.Vertical);
             {
                 var box = new Box();
                 {

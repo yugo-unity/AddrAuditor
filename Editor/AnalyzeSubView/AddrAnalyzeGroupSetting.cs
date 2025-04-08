@@ -41,29 +41,56 @@ namespace AddrAuditor.Editor
         static readonly string[] ITEM_DETAILS = new string[(int)ANALYZED_ITEM.MAX]
         {
             // USE_DEFAULT
-            "Disableにしてください。Use Defaultはリモートアセットを意識した設定となっておりコンソールプラットフォームでは不適切な値となります。",
+            "Disableにしてください。Use Defaultはリモートアセットを意識した設定となっておりコンソールプラットフォームでは不適切な値となります。\n" +
+            "\n" +
+            "Please set this to Disable. \"Use Default\" is a setting that is aware of remote assets and is an inappropriate value for console platforms.",
             // BUNDLE_COMPRESSION
             "ローカルアセットのみを考慮する場合、通常Uncompressedが推奨されます。PCはLZ4でも構いません。\n" +
-            "プラットフォームによってはROM圧縮機能の併用を考慮しますが、DLCに関してはLZ4圧縮を検討する必要があるかもしれません。",
+            "プラットフォームによってはDLCにLZ4圧縮を検討する必要があるかもしれません。\n" +
+            "\n" +
+            "When considering only local assets, Uncompressed is usually recommended. LZ4 is also fine for PCs.\n" +
+            "Depending on the platform, you may need to consider LZ4 compression for DLC.",
             // BUNDLE_CRC
             "CRCチェックはbundleダウンロード時の破損を判定することが主目的であり、ローカルアセットのみを考慮する場合は不要です。\n" +
-            "有効であると判定のためにロード時間が著しく延びることに注意してください。",
+            "有効であると判定のためにロード時間が著しく延びることに注意してください。\n" +
+            "\n" +
+            "The main purpose of CRC is to check breaking when downloading, so it is not necessary if you are only local bundles.\n" +
+            "Note: load time will increase significantly if enabled.",
             // BUNDLE_NAMING
             "FileName、またはFileName Hashとしてください。bundleのファイル名設定となります。\n" +
-            "AppendやOnly Hashの際のHash値はbundleの内容物から計算されるために変更があった場合に別ファイルとして扱われます。",
+            "AppendやOnly Hashの際のHash値はbundleの内容物から計算されるために変更があった場合に別ファイルとして扱われます。\n" +
+            "\n" +
+            "Please use either FileName or FileName Hash. This is the file name setting for the bundle.\n" +
+            "When using Append or Only Hash, hash is calculated from the contents of the bundle,\n" +
+            "so it will be treated as a separate file if there are any changes",
             // INCLUDE_IN_CATALOG
             "Addresses、GUIDsはどちらかのみ有効とする方が望ましいです。\n" +
             "Catalogファイルに書き込まれますが、両対応するとCatalogファイルの肥大化につながります。" +
-            "GUIDsの場合はAssetReferenceからのロードがスムーズです。",
+            "GUIDsの場合はAssetReferenceからのロードがスムーズです。\n" +
+            "\n" +
+            "It is better to use only one of the two types of addresses and GUIDs.\n" +
+            "Although they are both written to the Catalog file, using both types will result in catalog file becoming larger.\n" +
+            "When using GUIDs, loading from AssetReference is smoother.",
             // INTERNAL_ASSET_NAMING
             "AddressableAssetSettingsのCatalog設定が共通設定となり通常Dynamicが推奨されますが、\n" +
-            "Sceneが含まれるGroupではSceneManagerクラスにおいてScene名の文字列が扱えなくなることに注意してください。",
+            "Sceneが含まれるGroupではSceneManagerクラスにおいてScene名の文字列が扱えなくなることに注意してください。\n" +
+            "\n" +
+            "The setting for Catalog in AddressableAssetSettings is a common setting, and Dynamic is usually recommended.\n" +
+            "Please note that the SceneManager class cannot handle Scene name strings in Groups that contain Scenes.",
             // BUNDLE_MODE
             "Pack Separatelyによってbundleの数が多いと、ビルド時間やロード時間のオーバーヘッドとなります。\n" +
-            "ただしUnloadはbundle単位で行われる為、entryが多い場合のGroupのPacked Togetherにも注意してください。",
+            "ただしUnloadはbundle単位で行われる為、entryが多い場合のGroupのPacked Togetherにも注意してください。\n" +
+            "\n" +
+            "If you have a large number of bundles using the “Pack Separately” option,\n" +
+            "this will result in an overhead in build and load times.\n" +
+            "However, since unload is performed per bundle,\n" +
+            "please also be careful about “Packed Together” for groups with many entries.",
             // INCLUDE_IN_BUILD
             "開発中のデバッグ用途やDLCのグループをROMビルドの際から除外する際に利用可能です。\n" +
-            "意図せず無効となっていないか確認してください。",
+            "意図せず無効となっていないか確認してください。\n" +
+            "\n" +
+            "This can be used to exclude groups of DLC and debugging applications from ROM builds during development.\n" +
+            "Please check that it has not been disabled unintentionally.",
         };
 
         struct RecommendItem
@@ -189,6 +216,7 @@ namespace AddrAuditor.Editor
                 box.Add(header);
                 this.recommendationLabel = new Label();
                 this.recommendationLabel.style.whiteSpace = WhiteSpace.Normal;
+                this.recommendationLabel.style.left = 10f;
                 box.Add(this.recommendationLabel);
             }
             this.rootElement.Add(box);

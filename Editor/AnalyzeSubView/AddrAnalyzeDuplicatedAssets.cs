@@ -12,8 +12,14 @@ namespace AddrAuditor.Editor
     class AnalyzeViewDuplicatedAssets : ResultView
     {
         static readonly string DETAILS_MESSAGE = "重複してAssetBundleに含まれているアセットを検出します。\n" +
-                                                 "適切にグループを設定するかAutoGrouping機能を利用して解決してください。\n" +
-                                                 "Materialなど非常に小さいアセットは、ロード時間を考慮し重複の許容を検討できます。";
+                                                 "検出された場合、適切にグループを設定するかAutoGrouping機能を利用して解決する必要があります。\n" +
+                                                 "Materialなど非常に小さいアセットは、ロード時間を考慮し重複の許容を検討できます。\n" +
+                                                 "\n" +
+                                                 "Detecting assets that are included in the AssetBundle more than once.\n" +
+                                                 "If this is detected, you will need to resolve it by setting the groups appropriately " +
+                                                 "or using AutoGrouping function.\n" +
+                                                 "For very small assets such as Material, you can consider allowing duplicates to " +
+                                                 "take into account the load time.";
 
         public override bool requireAnalyzeCache => true;
         readonly List<RefAssetData> duplications = new ();
@@ -108,7 +114,7 @@ namespace AddrAuditor.Editor
             this.rootElement.Add(this.listView);
 
             // right side view
-            var optionalView = new TwoPaneSplitView(0, 100, TwoPaneSplitViewOrientation.Vertical);
+            var optionalView = new TwoPaneSplitView(0, REF_VIEW_DETAIL_HEIGHT, TwoPaneSplitViewOrientation.Vertical);
             {
                 var box = new Box();
                 {

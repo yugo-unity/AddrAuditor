@@ -14,7 +14,12 @@ namespace AddrAuditor.Editor
         static readonly string DETAILS_MESSAGE = "Materialに含まれる未使用のPropertyを検出します。MaterialのShaderを変更した際、" +
                                                  "変更前に使用されていたPropertyは自動で削除されません。\n" +
                                                  "ランタイムでShaderを切り替えるようなケースがない限り削除した方がベターです。\n" +
-                                                 "なお、この解析はAddressableに関わらずプロジェクト全体に行われます。";
+                                                 "なお、この解析はAddressableに関わらずプロジェクト全体に行われます。\n" +
+                                                 "\n" +
+                                                 "Detecting unused properties contained in the Material. When the shader in material is changed," +
+                                                 "unused properties are not automatically deleted.\n" +
+                                                 "Unless you are switching shaders at runtime, it is better to delete them.\n" +
+                                                 "Note: this analysis is performed on the entire project, regardless of Addressable.";
         
         struct UnusedProp
         {
@@ -216,7 +221,7 @@ namespace AddrAuditor.Editor
             }
             this.rootElement.Add(this.listView);
             
-            var optionalView = new TwoPaneSplitView(0, 100, TwoPaneSplitViewOrientation.Vertical);
+            var optionalView = new TwoPaneSplitView(0, REF_VIEW_DETAIL_HEIGHT, TwoPaneSplitViewOrientation.Vertical);
             {
                 var detailBox = new Box();
                 {
