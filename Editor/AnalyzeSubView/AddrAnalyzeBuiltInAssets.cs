@@ -51,6 +51,21 @@ namespace AddrAuditor.Editor
 
             this.UpdateReferencedView();
         }
+        
+        void OnSelectedRefentryListChanged(IEnumerable<int> selectedItems)
+        {
+            if (!selectedItems.Any())
+                return;
+            var index = selectedItems.First();
+            var dup = this.refEntries[index];
+            if (string.IsNullOrEmpty(dup.assetPath))
+                return;
+            
+            // focusing in Project Window
+            var obj = AssetDatabase.LoadMainAssetAtPath(this.refEntries[index].assetPath);
+            Selection.activeObject = obj;
+            EditorGUIUtility.PingObject(obj);
+        }
 
         /// <summary>
         /// called when require to analyze
@@ -211,6 +226,7 @@ namespace AddrAuditor.Editor
                     this.refentryListView = new ListView();
                     {
                         this.refentryListView.fixedItemHeight = 25f;
+                        this.refentryListView.selectedIndicesChanged += this.OnSelectedRefentryListChanged;
                         this.refentryListView.selectionType = SelectionType.Single;
                         this.refentryListView.makeItem = () =>
                         {
