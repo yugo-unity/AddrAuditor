@@ -109,13 +109,29 @@ namespace AddrAuditor.Editor
                 
                 EditorUtility.DisplayCancelableProgressBar("Searching Referring Entries...", refAsset.path, (float)i/entryCount);
                 //var path = AssetDatabase.GUIDToAssetPath(entry.guid);
-                var dependencyPaths = AssetDatabase.GetDependencies(entry.AssetPath, true);
-                foreach (var depPath in dependencyPaths)
+
+                static bool AddReferencedDependencies(string refAssetPath, string path)
                 {
-                    if (depPath != refAssetPath)
-                        continue;
-                    ret.Add(new RefEntry(entry.parentGroup.name, entry.AssetPath));
-                    break;
+                    var dependencyPaths = AssetDatabase.GetDependencies(path, true);
+                    foreach (var depPath in dependencyPaths)
+                    {
+                        if (depPath != refAssetPath)
+                            continue;
+                        return true;
+                    }
+
+                    return false;
+                }
+                if (entry.IsFolder)
+                {
+                    foreach (var asset in entry.SubAssets)
+                        if (AddReferencedDependencies(refAssetPath, asset.AssetPath))
+                            ret.Add(new RefEntry(entry.parentGroup.name, asset.AssetPath));
+                }
+                else
+                {
+                    if (AddReferencedDependencies(refAssetPath, entry.AssetPath))
+                        ret.Add(new RefEntry(entry.parentGroup.name, entry.AssetPath));
                 }
             }
             EditorUtility.ClearProgressBar();
