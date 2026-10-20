@@ -10,7 +10,7 @@
 ***********************************************************************************************************/
 
 using System.Collections.Generic;
-using UnityEditor;
+
 using UnityEditor.Experimental.GraphView;
 using UnityEngine.UIElements;
 
@@ -26,7 +26,7 @@ namespace AddrAuditor.Editor
         public Dictionary<string, Port> input = new(); // InputContainerに登録されているPort
         public Dictionary<string, Port> output = new(); // OutputContainerに登録されているPort
 
-        public Dictionary<string, GUID> assetGuid = new(); // Portに登録されているAssetのGUID（依存関係で使うのでキャッシュ）
+        public Dictionary<string, UnityEngine.GUID> assetGuid = new(); // Portに登録されているAssetのGUID（依存関係で使うのでキャッシュ）
 
         public Dictionary<Port, HashSet<Port>> connectTo = new(); // 接続されたPort
         public Dictionary<Port, List<FlowingEdge>> edgeTo = new(); // 接続されたEdge
