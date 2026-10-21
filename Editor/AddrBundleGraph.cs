@@ -31,7 +31,6 @@ namespace AddrAuditor.Editor
         const float NODE_OFFSET_H = 140f;
         const float NODE_OFFSET_V = 20f;
 
-        //BundleNode shaderNode, builtinNode;
         List<FlowingEdge> allEdges = new ();
         Dictionary<string, BundleNode> bundleNodes = new ();
         List<string> explicitNodes = new ();
@@ -187,7 +186,6 @@ namespace AddrAuditor.Editor
                 // Shaderグループ非表示
                 if (!this.graphSetting.enabledShaderNode)
                 {
-                    //if (node.title == this.shaderNode || node == this.builtinNode)
                     if (IsShaderGroupNode(node) || IsBuiltInShaderNode(node))
                     {
                         node.visible = false;
@@ -278,13 +276,6 @@ namespace AddrAuditor.Editor
             {
                 // bundleNodeにない場合は設定でSkipされてるものとみなす
                 aligned = true;
-
-                // for test
-                // if (context.bundleToAssetGroup.TryGetValue(bundleName, out var groupGuid))
-                // {
-                //     var groupName = context.Settings.FindGroup(findGroup => findGroup is not null && findGroup.Guid == groupGuid).name;
-                //     Debug.LogWarning($"Skip bundle : {groupName} : {bundleName}");
-                // }
             }
 
             return aligned;
@@ -302,13 +293,10 @@ namespace AddrAuditor.Editor
         {
             node = null;
             var title = string.Empty;
-            //var isBuiltIn = false;
-            //var isShaderNode = false; // Shader
             // ノード名
             if (bundleName.Contains(AddrUtility.UNITY_BUILTIN_SHADERS))
             {
                 title = "Unity Built-in Shaders";
-                //isBuiltIn = true;
             }
             else
             {
@@ -319,8 +307,6 @@ namespace AddrAuditor.Editor
                 {
                     var groupName = context.Settings.FindGroup(findGroup => findGroup is not null && findGroup.Guid == groupGuid).name;
                     title = $"{groupName}/{title}";
-
-                    //isShaderNode = (this.shaderNode == null && groupName == AddressableAutoGrouping.SHADER_GROUP_NAME);
 
                     // 常駐アセットグループを除外
                     if (!graphSetting.enabledResidentNode)
@@ -349,10 +335,6 @@ namespace AddrAuditor.Editor
             node = new BundleNode(graphSetting);
             node.title = title;
             node.name = node.bundleName = bundleName;
-            //if (isBuiltIn)
-            //    this.builtinNode = node;
-            //if (isShaderNode)
-            //    this.shaderNode = node;
 
             // 明示的なノードは黄色
             if (isExplicit)

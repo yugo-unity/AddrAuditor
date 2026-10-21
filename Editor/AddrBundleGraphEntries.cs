@@ -74,15 +74,8 @@ namespace AddrAuditor.Editor
             node.outputContainer.Sort(CompareGroup);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
         /// <param name="rule">解析データ</param>
-        /// <param name="parentNode"></param>
-        /// <param name="bundleName"></param>
-        /// <param name="depth"></param>
-        /// <returns></returns>
-        int AddEntriesNode(DependenciesRule rule, BundleNode parentNode, string bundleName, int depth)
+        void AddEntriesNode(DependenciesRule rule, BundleNode parentNode, string bundleName, int depth)
         {
             var onlyConnect = false;
 
@@ -94,7 +87,7 @@ namespace AddrAuditor.Editor
             {
                 // 新規登録
                 if (!CreateBundleNode(rule.context, bundleName, isExplicit: false, this.graphSetting, out node))
-                    return 0; // 無視されるノード
+                    return; // 無視されるノード
                 this.bundleNodes.Add(bundleName, node);
                 this.AddElement(node);
 
@@ -186,13 +179,6 @@ namespace AddrAuditor.Editor
                                             hit = true;
                                             break;
                                         }
-                                        //if (parentObj == refAsset) {
-                                        //    // 参照されているがGUIDが独立していればSubAssetとみなさない
-                                        //    // e.g. fbxに含まれるMaterial/Texture/ShaderはGUIDが振られるのでSubAssetではない
-                                        //    if (parentObj.guid != refAsset.guid)
-                                        //        hit = true;
-                                        //    break;
-                                        //}
                                     }
                                 }
                             }
@@ -216,14 +202,13 @@ namespace AddrAuditor.Editor
             }
 
             if (onlyConnect)
-                return 0;
+                return;
 
             // 表示深度制限
             depth++;
             if (this.graphSetting.enabledDepth > 0 && this.graphSetting.enabledDepth <= depth)
-                return 0;
+                return;
 
-            var totalDepCount = 0;
             // 依存先がある場合は作成
             if (rule.context.bundleToImmediateBundleDependencies.TryGetValue(bundleName, out var depBundleNames))
             {
@@ -236,14 +221,10 @@ namespace AddrAuditor.Editor
                         if (bundleName == depBundleName)
                             continue;
 
-                        totalDepCount += this.AddEntriesNode(rule, node, depBundleName, depth);
+                        this.AddEntriesNode(rule, node, depBundleName, depth);
                     }
                 }
             }
-
-            totalDepCount = Mathf.Max(totalDepCount, 1);
-
-            return totalDepCount;
         }
 
         void ViewEntries(DependenciesRule rule)
@@ -289,7 +270,6 @@ namespace AddrAuditor.Editor
                 CreateOutputPortsWithAssets(rule, node, this.graphSetting.selectedEntries);
 
                 // implicitノード作成
-                //var totalDepth = 0;
                 if (context.bundleToImmediateBundleDependencies.TryGetValue(bundleName, out var depBundleNames))
                 {
                     if (depBundleNames.Count > 1)
@@ -302,8 +282,6 @@ namespace AddrAuditor.Editor
                                 continue;
                             
                             this.AddEntriesNode(rule, node, depBundleName, depth);
-                            //var depCount = this.AddEntriesNode(rule, node, depBundleName, depth);
-                            //totalDepth += depCount;
                         }
                     }
                 }

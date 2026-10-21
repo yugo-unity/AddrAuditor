@@ -51,7 +51,6 @@ namespace AddrAuditor.Editor
             foreach (var pair in edgeFrom)
             {
                 foreach (var edge in pair.Value)
-                    //edge.selected = true; // 色をOutputとは変える
                     edge.activeFlow = true;
             }
         }
@@ -69,7 +68,6 @@ namespace AddrAuditor.Editor
             foreach (var pair in edgeFrom)
             {
                 foreach (var edge in pair.Value)
-                    //edge.selected = false;
                     edge.activeFlow = false;
             }
         }
@@ -77,7 +75,6 @@ namespace AddrAuditor.Editor
         // 右クリックメニューをカスタマイズ
         public override void BuildContextualMenu(ContextualMenuPopulateEvent evt)
         {
-            //base.BuildContextualMenu(evt); // no need "Disconnect All"
             evt.menu.AppendAction("Focus the dependencies on this bundle", FocusSimpleNode);
             evt.menu.AppendAction("Focus the dependencies on this bundle with contained entries", FocusEntriesNode);
         }

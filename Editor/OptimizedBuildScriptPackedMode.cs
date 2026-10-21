@@ -7,8 +7,6 @@ using UnityEditor.Build.Pipeline;
 using UnityEditor.Build.Pipeline.Interfaces;
 using UnityEditor.Build.Pipeline.WriteTypes;
 using UnityEngine;
-using System.IO;
-using System.Text;
 using System.Collections.Generic;
 using UnityEditor.AddressableAssets.Settings.GroupSchemas;
 
@@ -25,7 +23,6 @@ namespace AddrAuditor.Editor
             // NOTE: we should clear callbacks
             ContentPipeline.BuildCallbacks.PostScriptsCallbacks = null;
             ContentPipeline.BuildCallbacks.PostPackingCallback = null;
-            //ContentPipeline.BuildCallbacks.PostWritingCallback = null;
 
             //Debug.LogWarning("Clear BuildCallbacks-------------"); // for checking
 
@@ -45,8 +42,6 @@ namespace AddrAuditor.Editor
             };
 
             ContentPipeline.BuildCallbacks.PostPackingCallback = PostPacking;
-
-            //ContentPipeline.BuildCallbacks.PostWritingCallback = PostWriting;
 
             // no need to set (not be allowed) StripUnityVersion with DisableWriteTypeTree
             var settings = AddressableAssetSettingsDefaultObject.Settings;
@@ -150,87 +145,5 @@ namespace AddrAuditor.Editor
 
             return ReturnCode.Success;
         }
-
-        //-----------------------------------------------------------------------------
-        // [under consideration] Encrypt AssetBundle
-        //-----------------------------------------------------------------------------
-        // unsafe static void EncryptUsingAesStream(string fileName)
-        // {
-        //     var bundleName = Path.GetFileNameWithoutExtension(fileName);
-        //     var password = System.Text.Encoding.UTF8.GetBytes(Application.unityVersion);
-        //     Span<byte> salt = stackalloc byte[bundleName.Length];
-        //     bundleName.ConvertTo(salt);
-        //     var fullPath = Application.dataPath + "/../" + fileName;
-        //     var data = File.ReadAllBytes(fullPath); // NOTE: need to read before stream is opened
-        //     using (var cryptor = new SeekableAesStream(fullPath, password, salt, true))
-        //     {
-        //         cryptor.Write(data, 0, data.Length);
-        //     }
-        // }
-
-        ReturnCode PostWriting(IBuildParameters buildParameters, IDependencyData dependencyData, IWriteData writeData, IBuildResults results)
-        {
-            //-----------------------------------------------------------------------------
-            // Export scene name/Dynamic Id mapping.
-            // For anyone who want to use SceneManager.GetSceneByName
-            // with GUID/Dynamic internal asset naming mode.
-            // 
-            // internal Asset NamingがGUID/Dynamicの場合、ランタイムのシーン名がIDになる
-            // ビルド時にシーン名とIDの対象テーブルを用意しておくことで
-            // SceneManager.GetSceneByNameを従来通り利用可能
-            //-----------------------------------------------------------------------------
-            var builder = new StringBuilder();
-            builder.AppendLine("using System.Collections.Generic;\n");
-            builder.AppendLine("namespace AddressablesExtend {");
-            builder.AppendLine("\t/// <summary>");
-            builder.AppendLine("\t/// Mapping asset name / internal name");
-            builder.AppendLine("\t/// </summary>");
-            builder.AppendLine("\tpublic static class AssetTable {");
-            builder.AppendLine("\t\tpublic static readonly Dictionary<string, string> internalSceneName = new () {");
-            builder.Append("\t\t\t{ ");
-            foreach (var op in writeData.WriteOperations)
-            {
-                if (op is SceneBundleWriteOperation sceneOp)
-                {
-                    foreach (var scenes in sceneOp.Info.bundleScenes)
-                    {
-                        var sceneName = Path.GetFileNameWithoutExtension(AssetDatabase.GUIDToAssetPath(scenes.asset));
-                        var address = Path.GetFileNameWithoutExtension(scenes.address);
-                        builder.Append($"\"{sceneName}\", \"{address}\" }},\n");
-                    }
-                }
-            }
-
-            builder.AppendLine("\t\t};");
-            builder.AppendLine("\t};");
-            builder.AppendLine("};");
-            builder.Replace("\r\n", "\n", 0, builder.Length); // Convert CRLF to LF
-            File.WriteAllText(Application.dataPath + "\\AddressablesExtend\\AssetTable.cs", builder.ToString(), Encoding.UTF8);
-            AssetDatabase.Refresh(ImportAssetOptions.ImportRecursive);
-
-            // // to Encrypt AssetBundle
-            // var bundleResults = (IBundleBuildResults)results;
-            // foreach (var ret in bundleResults.BundleInfos.Values)
-            //     EncryptUsingAesStream(ret.FileName);
-
-            return ReturnCode.Success;
-        }
-
-        // //-----------------------------------------------------------------------------
-        // // Normaly you can confirm bundle name/hash mapping
-        // // by Build Layout when Preference/Addressables/Debug Build Layout is enabled.
-        // // On the other hand, you can also like this.
-        // // 
-        // // Bundle NamingがHash to Filenameの場合、元が何のbundleだったか確認したい時用
-        // // 通常はBuild Layoutを出力することで確認出来るが下記手法で自前で出力することも可能
-        // //-----------------------------------------------------------------------------
-        // protected override string ConstructAssetBundleName(AddressableAssetGroup assetGroup, BundledAssetGroupSchema schema, BundleDetails info, string assetBundleName) {
-        //     var ret = base.ConstructAssetBundleName(assetGroup, schema, info, assetBundleName);
-        //
-        //     // Collect bundle name/hash mapping
-        //     Debug.LogWarning($"Bundle name to Hash : {assetBundleName} / {info.Hash}");
-        //
-        //     return ret;
-        // }
     }
 }

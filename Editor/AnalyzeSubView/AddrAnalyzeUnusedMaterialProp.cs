@@ -32,15 +32,14 @@ namespace AddrAuditor.Editor
             public RefAssetData refAssetData;
             bool initRefAssetData;
             
-            public void AddList(List<UnusedProp> list, SerializedProperty sp, int propIndex, string propName, AnalyzeCache analyzeCache)
+            public void AddList(List<UnusedProp> list, SerializedProperty sp, int propIndex, string propName, Dictionary<string, RefAssetData> refAssetDic)
             {
                 this.sp = sp;
                 this.propIndex = propIndex;
                 this.propName = propName;
                 if (this.initRefAssetData == false)
                 {
-                    var temp = this.guid;
-                    this.refAssetData = analyzeCache.refAssets.Find(item => item.guid == temp);
+                    refAssetDic.TryGetValue(this.guid, out this.refAssetData);
                     this.initRefAssetData = true;
                 }
                 list.Add(this);
@@ -97,25 +96,36 @@ namespace AddrAuditor.Editor
         {
             this.analyzeCache = cache;
             this.unusedProps.Clear();
-            //var guids = AssetDatabase.FindAssets("t:Material"); // include Packages
             var serachFolder = new string[] { "Assets", };
             var guids = AssetDatabase.FindAssets("t:Material", serachFolder);
+
+            // the first asset is used if the same GUID exists (same as List.Find)
+            var refAssetDic = new Dictionary<string, RefAssetData>(cache.refAssets.Count);
+            foreach (var refAsset in cache.refAssets)
+                refAssetDic.TryAdd(refAsset.guid, refAsset);
+            // many materials share the same shader
+            var shaderPropertiesDic = new Dictionary<Shader, HashSet<string>>();
 
             for (var index = 0; index < guids.Length; ++index)
             {
                 var guid = guids[index];
                 var path = AssetDatabase.GUIDToAssetPath(guid);
-                EditorUtility.DisplayCancelableProgressBar("Searching Unused Material Properties...", path, (float)index/guids.Length);
+                if ((index & PROGRESS_INTERVAL_MASK) == 0)
+                    EditorUtility.DisplayCancelableProgressBar("Searching Unused Material Properties...", path, (float)index/guids.Length);
                 var m = AssetDatabase.LoadAssetAtPath<Material>(path);
                 if (m == null || m.shader == null)
                     continue;
 
-                var properties = new HashSet<string>();
-                var count = ShaderUtil.GetPropertyCount(m.shader);
-                for (var i = 0; i < count; i++)
+                if (!shaderPropertiesDic.TryGetValue(m.shader, out var properties))
                 {
-                    var propName = ShaderUtil.GetPropertyName(m.shader, i);
-                    properties.Add(propName);
+                    properties = new HashSet<string>();
+                    var count = ShaderUtil.GetPropertyCount(m.shader);
+                    for (var i = 0; i < count; i++)
+                    {
+                        var propName = ShaderUtil.GetPropertyName(m.shader, i);
+                        properties.Add(propName);
+                    }
+                    shaderPropertiesDic.Add(m.shader, properties);
                 }
 
                 var so = new SerializedObject(m);
@@ -127,15 +137,12 @@ namespace AddrAuditor.Editor
                     guid = guid,
                     assetPath = path,
                     material = m,
-                    //sp = sp,
-                    // propIndex = index,
-                    // propName = propName,
                 };
                 for (var i = texEnvSp.arraySize - 1; i >= 0; i--)
                 {
                     var propName = texEnvSp.GetArrayElementAtIndex(i).FindPropertyRelative("first").stringValue;
                     if (!properties.Contains(propName))
-                        unusedProp.AddList(unusedProps, texEnvSp, i, propName, analyzeCache);
+                        unusedProp.AddList(unusedProps, texEnvSp, i, propName, refAssetDic);
                 }
 
                 var floatsSp = sp.FindPropertyRelative("m_Floats");
@@ -143,7 +150,7 @@ namespace AddrAuditor.Editor
                 {
                     var propName = floatsSp.GetArrayElementAtIndex(i).FindPropertyRelative("first").stringValue;
                     if (!properties.Contains(propName))
-                        unusedProp.AddList(unusedProps, floatsSp, i, propName, analyzeCache);
+                        unusedProp.AddList(unusedProps, floatsSp, i, propName, refAssetDic);
                 }
 
                 var intSp = sp.FindPropertyRelative("m_Ints");
@@ -151,7 +158,7 @@ namespace AddrAuditor.Editor
                 {
                     var propName = intSp.GetArrayElementAtIndex(i).FindPropertyRelative("first").stringValue;
                     if (!properties.Contains(propName))
-                        unusedProp.AddList(unusedProps, intSp, i, propName, analyzeCache);
+                        unusedProp.AddList(unusedProps, intSp, i, propName, refAssetDic);
                 }
 
                 var colorsSp = sp.FindPropertyRelative("m_Colors");
@@ -159,7 +166,7 @@ namespace AddrAuditor.Editor
                 {
                     var propName = colorsSp.GetArrayElementAtIndex(i).FindPropertyRelative("first").stringValue;
                     if (!properties.Contains(propName))
-                        unusedProp.AddList(unusedProps, colorsSp, i, propName, analyzeCache);
+                        unusedProp.AddList(unusedProps, colorsSp, i, propName, refAssetDic);
                 }
             }
             EditorUtility.ClearProgressBar();

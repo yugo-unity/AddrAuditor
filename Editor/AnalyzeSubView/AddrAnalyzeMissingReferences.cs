@@ -67,12 +67,17 @@ namespace AddrAuditor.Editor
         {
             this.missingAssets.Clear();
             var paths = AssetDatabase.GetAllAssetPaths();
-            //foreach (var path in paths)
             for (var i = 0; i < paths.Length; ++i)
             {
                 var path = paths[i];
-                EditorUtility.DisplayCancelableProgressBar("Searching Missing References...", path, (float)i/paths.Length);
+                if ((i & PROGRESS_INTERVAL_MASK) == 0)
+                    EditorUtility.DisplayCancelableProgressBar("Searching Missing References...", path, (float)i/paths.Length);
                 if (path.Contains("Packages"))
+                    continue;
+                // load only GameObject and SceneAsset (loading all assets is very slow)
+                var mainType = AssetDatabase.GetMainAssetTypeAtPath(path);
+                if (mainType == null ||
+                    (!typeof(GameObject).IsAssignableFrom(mainType) && !typeof(SceneAsset).IsAssignableFrom(mainType)))
                     continue;
                 var o = AssetDatabase.LoadMainAssetAtPath(path);
                 switch (o)

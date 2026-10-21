@@ -41,7 +41,7 @@ namespace AddrAuditor.Editor
         public void CreateGUI()
         {
             // find settings file
-            var settingsPath = $"Assets/{nameof(AddrAutoGroupingSettings)}.asset";
+            var settingsPath = AddrAutoGrouping.SETTINGS_PATH;
             var groupingSettings = AssetDatabase.LoadAssetAtPath<AddrAutoGroupingSettings>(settingsPath);
             if (groupingSettings == null)
             {
@@ -142,7 +142,6 @@ namespace AddrAuditor.Editor
             var field = new DropdownField("Resident Group", choices, 0);
             field.tooltip = "常駐アセットのグループを指定します。\n\n" +
                             "You can specify asset group that remain on memory persistently.";
-            //field.AddToClassList("some-styled-field");
             var firstGroup = settings.FindGroup(g => g && g.Guid == groupingSettings.residentGroupGUID);
             field.value = firstGroup != null ? firstGroup.Name : "";
             field.labelElement.style.minWidth = (StyleLength)200f;
@@ -182,12 +181,6 @@ namespace AddrAuditor.Editor
                 groupingSettings.allowDuplicatedMaterial = evt.newValue;
                 EditorUtility.SetDirty(groupingSettings);
             });
-            // NOTE: パッチ差分が修正されたので特に不要
-            // var thresholdField = AddrUtility.CreateInteger(root,
-            //     "Threshold (KiB)",
-            //     "ファイルサイズが閾値を超える場合にSingleグループに割り振ります。0の場合は行いません。LZ4圧縮された後のサイズではないので検証目的で使用してください。",
-            //     groupingSettings.singleThreshold);
-            // thresholdField.RegisterValueChangedCallback((evt) => groupingSettings.singleThreshold = evt.newValue);
             
             SelectResidentGroup(box, settings, groupingSettings);
             
@@ -206,7 +199,6 @@ namespace AddrAuditor.Editor
                 var deletedGroupList = new List<AddressableAssetGroup>();
                 foreach (var group in settings.groups)
                 {
-                    //if (group.ReadOnly && group.GetSchema<PlayerDataGroupSchema>() == null)
                     if (AddrAutoGrouping.IsAutoGroup(group))
                         deletedGroupList.Add(group);
                 }
@@ -256,13 +248,7 @@ namespace AddrAuditor.Editor
             toggle.RegisterValueChangedCallback((evt) =>
             {
                 groupingSettings.hashName = evt.newValue;
-                foreach (var group in settings.groups)
-                {
-                    var schema = group.GetSchema<BundledAssetGroupSchema>();
-                    schema.BundleNaming = groupingSettings.hashName
-                        ? BundledAssetGroupSchema.BundleNamingStyle.FileNameHash
-                        : BundledAssetGroupSchema.BundleNamingStyle.NoHash;
-                }
+                ApplyBundleNaming(settings, groupingSettings.hashName);
 
                 settings.SetDirty(AddressableAssetSettings.ModificationEvent.EntryModified, eventData: null,
                     postEvent: true, settingsModified: true);
@@ -275,16 +261,7 @@ namespace AddrAuditor.Editor
             {
                 groupingSettings.useLocalProvider = evt.newValue;
                 // NOTE: all groups are updated if AddressableAssetSettings is updated
-                if (groupingSettings.useLocalProvider)
-                {
-                    settings.BundledAssetProviderType = new SerializedType() { Value = typeof(LocalBundledAssetProvider) };
-                    settings.AssetBundleProviderType = new SerializedType() { Value = typeof(LocalAssetBundleProvider) };
-                }
-                else
-                {
-                    settings.BundledAssetProviderType = new SerializedType() { Value = typeof(BundledAssetProvider) };
-                    settings.AssetBundleProviderType = new SerializedType() { Value = typeof(AssetBundleProvider) };
-                }
+                ApplyProviderTypes(settings, groupingSettings.useLocalProvider);
                 settings.SetDirty(AddressableAssetSettings.ModificationEvent.EntryModified, eventData: null,
                     postEvent: true, settingsModified: true);
             });
@@ -330,23 +307,8 @@ namespace AddrAuditor.Editor
                 settings.ActivePlayerDataBuilderIndex = settings.DataBuilders.IndexOf(dataBuilder);
                 
                 // verify settings for Provider
-                if (groupingSettings.useLocalProvider)
-                {
-                    settings.BundledAssetProviderType = new SerializedType() { Value = typeof(LocalBundledAssetProvider) };
-                    settings.AssetBundleProviderType = new SerializedType() { Value = typeof(LocalAssetBundleProvider) };
-                }
-                else
-                {
-                    settings.BundledAssetProviderType = new SerializedType() { Value = typeof(BundledAssetProvider) };
-                    settings.AssetBundleProviderType = new SerializedType() { Value = typeof(AssetBundleProvider) };
-                }
-                foreach (var group in settings.groups)
-                {
-                    var schema = group.GetSchema<BundledAssetGroupSchema>();
-                    schema.BundleNaming = groupingSettings.hashName
-                        ? BundledAssetGroupSchema.BundleNamingStyle.FileNameHash
-                        : BundledAssetGroupSchema.BundleNamingStyle.NoHash;
-                }
+                ApplyProviderTypes(settings, groupingSettings.useLocalProvider);
+                ApplyBundleNaming(settings, groupingSettings.hashName);
                 settings.SetDirty(AddressableAssetSettings.ModificationEvent.EntryModified, eventData: null,
                     postEvent: true, settingsModified: true);
                 
@@ -362,6 +324,31 @@ namespace AddrAuditor.Editor
             };
             
             root.Add(box);
+        }
+
+        static void ApplyProviderTypes(AddressableAssetSettings settings, bool useLocalProvider)
+        {
+            if (useLocalProvider)
+            {
+                settings.BundledAssetProviderType = new SerializedType() { Value = typeof(LocalBundledAssetProvider) };
+                settings.AssetBundleProviderType = new SerializedType() { Value = typeof(LocalAssetBundleProvider) };
+            }
+            else
+            {
+                settings.BundledAssetProviderType = new SerializedType() { Value = typeof(BundledAssetProvider) };
+                settings.AssetBundleProviderType = new SerializedType() { Value = typeof(AssetBundleProvider) };
+            }
+        }
+
+        static void ApplyBundleNaming(AddressableAssetSettings settings, bool hashName)
+        {
+            foreach (var group in settings.groups)
+            {
+                var schema = group.GetSchema<BundledAssetGroupSchema>();
+                schema.BundleNaming = hashName
+                    ? BundledAssetGroupSchema.BundleNamingStyle.FileNameHash
+                    : BundledAssetGroupSchema.BundleNamingStyle.NoHash;
+            }
         }
 
         static void OptionalButtons(VisualElement root)
@@ -385,13 +372,6 @@ namespace AddrAuditor.Editor
             
             root.Add(box);
             
-            // integrated in Analyze Window
-            // button = AddrUtility.CreateButton(root, "Remove Unused Material properties", 
-            //     "未使用のShader Propertyを削除します。\n\n" +
-            //     "[optional] Remove unused properties in Material.");
-            // button.style.width = SINGLE_BUTTON_WIDTH;
-            // button.style.alignSelf = new StyleEnum<Align>(Align.Center);
-            // button.clicked += CleanupMaterialProperty;
         }
     }
 }

@@ -47,16 +47,9 @@ namespace AddrAuditor.Editor
 
             if (this.context == null)
             {
-                this.allBundleInputDefs = new List<AssetBundleBuild>();
-                var bundleToAssetGroup = new Dictionary<string, string>();
-                AddrUtility.CalculateInputDefinitions(settings, this.allBundleInputDefs, bundleToAssetGroup);
-                this.context = AddrUtility.GetBuildContext(settings, bundleToAssetGroup);
-                this.extractData = new ExtractDataTask();
-                var exitCode = AddrUtility.RefleshBuild(settings, this.allBundleInputDefs, this.extractData, this.context);
-                if (exitCode < ReturnCode.Success)
-                {
-                    Debug.LogError($"Analyze build failed. {exitCode}");
-                }
+                // NOTE: keep the context even if failed (no retry)
+                AddrUtility.CalculateBundleWriteData(settings, out this.context, out this.extractData, out var inputDefs);
+                this.allBundleInputDefs = inputDefs;
             }
         }
 
@@ -66,7 +59,7 @@ namespace AddrAuditor.Editor
             this.extractData = null;
             this.allBundleInputDefs = null;
         }
-        
+
         /// <summary>
         /// 指定エントリが指定bundleに含まれているか
         /// </summary>
@@ -122,7 +115,7 @@ namespace AddrAuditor.Editor
             this.primaryBox.style.width = 250f;
             this.rootVisualElement.Add(this.primaryBox);
             this.secondaryBox = new Box();
-            this.secondaryBox.style.position = Position.Absolute;;
+            this.secondaryBox.style.position = Position.Absolute;
             this.secondaryBox.style.width = 300f;
             this.secondaryBox.style.left = 250f;
             this.rootVisualElement.Add(this.secondaryBox);
@@ -210,7 +203,6 @@ namespace AddrAuditor.Editor
                     foreach (var entry in group.entries)
                         entryList.Add(entry);
                 }
-                //selectedEntryField.index = 0;
                 selectedEntryField.UpdateList(entryList);
             };
 

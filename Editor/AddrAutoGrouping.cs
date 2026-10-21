@@ -25,7 +25,6 @@ namespace AddrAuditor.Editor
         public List<System.Type> usedSubAssetTypes;
 
         public List<string> bundles; // referenced Bundle
-        //public long fileSize;
     }
 
     /// <summary>
@@ -49,9 +48,6 @@ namespace AddrAuditor.Editor
         public const string SINGLE_GROUP_NAME = "+Shared_Single";
         public const string RESIDENT_GROUP_NAME = "+Residents";
 
-        // delegate long GetMemorySizeLongCallback(Texture tex);
-        // GetMemorySizeLongCallback GetStorageMemorySizeLong = null;
-
         class SharedGroupData
         {
             public SharedGroupData(string name, List<string> bundles)
@@ -71,10 +67,25 @@ namespace AddrAuditor.Editor
         /// <param name="group">addressables group</param>
         public static bool IsAutoGroup(AddressableAssetGroup group)
         {
+            // NOTE: SHADER_GROUP_NAME and SINGLE_GROUP_NAME contain SHARED_GROUP_NAME
             return group.Name.Contains(SHARED_GROUP_NAME) ||
-                   group.Name.Contains(SHADER_GROUP_NAME) ||
-                   group.Name.Contains(SINGLE_GROUP_NAME) ||
                    group.Name.Contains(RESIDENT_GROUP_NAME);
+        }
+
+        /// <summary>
+        /// find the SpriteAtlas that packs the Sprite of the referenced asset
+        /// </summary>
+        /// <returns>the first SpriteAtlas that can bind the Sprite, or null</returns>
+        internal static SpriteAtlasData FindPackingAtlas(RefAssetData refAsset, List<SpriteAtlasData> atlases)
+        {
+            var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(refAsset.path);
+            foreach (var atlas in atlases)
+            {
+                // AFAIK no way to find SpriteAtlas contains a Sprite before instancing
+                if (atlas.instance.CanBindTo(sprite))
+                    return atlas;
+            }
+            return null;
         }
 
         /// <summary>
@@ -91,13 +102,12 @@ namespace AddrAuditor.Editor
             if (refAssets == null)
                 return false;
 
-            // // Asset file size threshold for bundling separately
-            // var SEPARATE_ASSET_SIZE = (long)agSettings.singleThreshold * 1024L;
-
             var sharedGroupDataList = new List<SharedGroupData>();
+            // key: sorted names of referenced bundles (to find the group that has the same bundles)
+            var sharedGroupDataMap = new Dictionary<string, SharedGroupData>();
             var shaderGroupData = new SharedGroupData(SHADER_GROUP_NAME, null);
-            var singleGroupData = new SharedGroupData(SINGLE_GROUP_NAME, null);
             var residentGroupData = new SharedGroupData(RESIDENT_GROUP_NAME, null);
+            var sortedBundles = new List<string>();
 
             foreach (var refAsset in refAssets)
             {
@@ -107,24 +117,16 @@ namespace AddrAuditor.Editor
                 // Sprite is a sub-asset of Texture, but Sprite has the Texture as dependent
                 if (refAsset.usedSubAssetTypes.Contains(typeof(Sprite)))
                 {
-                    var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(refAsset.path);
-                    var packed = false;
-                    foreach (var atlas in atlases)
+                    var atlas = FindPackingAtlas(refAsset, atlases);
+                    if (atlas != null)
                     {
-                        // AFAIK no way to find SpriteAtlas contains a Sprite before instancing
-                        if (atlas.instance.CanBindTo(sprite))
-                        {
-                            // Sprite is not considered an implicit asset if only SpriteAtlas refers it
-                            packed = refAsset.usedSubAssetTypes.Count == 1;
-                            // WARNING: If the original texture of a Sprite that is contained in SpriteAtlas is referenced,
-                            //          the original texture is treated as a resident asset if the SpriteAtlas is resident.
-                            residentAsset |= atlas.isResident;
-                            break;
-                        }
+                        // WARNING: If the original texture of a Sprite that is contained in SpriteAtlas is referenced,
+                        //          the original texture is treated as a resident asset if the SpriteAtlas is resident.
+                        residentAsset |= atlas.isResident;
+                        // Sprite is not considered an implicit asset if only SpriteAtlas refers it
+                        if (refAsset.usedSubAssetTypes.Count == 1)
+                            continue;
                     }
-
-                    if (packed)
-                        continue;
                 }
 
                 if (residentAsset)
@@ -134,63 +136,29 @@ namespace AddrAuditor.Editor
                 }
 
                 // support Shader Group
-                if (agSettings.shaderGroup)
+                if (agSettings.shaderGroup && refAsset.usedSubAssetTypes[0] == typeof(Shader))
                 {
-                    var assetType = refAsset.usedSubAssetTypes[0];
-                    if (assetType == typeof(Shader))
-                    {
-                        shaderGroupData.refAssets.Add(refAsset);
-                        continue;
-                    }
+                    shaderGroupData.refAssets.Add(refAsset);
+                    continue;
                 }
-
-                // NOTE: if you have large assets that are scheduled to be updated frequently, you should consider follows
-                // // if larger than the specified size, it will be a single bundle
-                // if (SEPARATE_ASSET_SIZE > 0 && implicitParam.fileSize > SEPARATE_ASSET_SIZE)
-                // {
-                //     singleGroupParam.implicitParams.Add(implicitParam);
-                //     continue;
-                // }
 
                 // ignore implicit assets that is not duplicated
                 if (refAsset.bundles.Count == 1)
                     continue;
 
-                var hit = sharedGroupDataList.Count > 0;
-                // find existed shared groups
-                foreach (var groupData in sharedGroupDataList)
+                // find existed shared groups that have the same bundles
+                sortedBundles.Clear();
+                sortedBundles.AddRange(refAsset.bundles);
+                sortedBundles.Sort(System.StringComparer.Ordinal);
+                var key = string.Join("\n", sortedBundles);
+                if (!sharedGroupDataMap.TryGetValue(key, out var groupData))
                 {
-                    // no match referenced count
-                    if (groupData.bundles.Count != refAsset.bundles.Count)
-                    {
-                        hit = false;
-                        continue;
-                    }
-
-                    // confirm all bundles are the same 
-                    hit = true;
-                    foreach (var bundle in refAsset.bundles)
-                    {
-                        if (!groupData.bundles.Contains(bundle))
-                        {
-                            hit = false;
-                            break;
-                        }
-                    }
-                    if (hit)
-                    {
-                        groupData.refAssets.Add(refAsset);
-                        break;
-                    }
+                    // no match, create new group
+                    groupData = new SharedGroupData(SHARED_GROUP_NAME + "{0}", refAsset.bundles);
+                    sharedGroupDataList.Add(groupData);
+                    sharedGroupDataMap.Add(key, groupData);
                 }
-
-                // no match, create new group
-                if (!hit)
-                {
-                    var param = new SharedGroupData(SHARED_GROUP_NAME + "{0}", refAsset.bundles);
-                    param.refAssets.Add(refAsset);
-                    sharedGroupDataList.Add(param);
-                }
+                groupData.refAssets.Add(refAsset);
             }
 
             var continued = sharedGroupDataList.Count > 0;
@@ -203,10 +171,10 @@ namespace AddrAuditor.Editor
                 sharedGroupDataList.Add(shaderGroupData);
 
             // assign to the group that has Packed Separately setting
-            var singleGroup = CreateSharedGroup(settings, SINGLE_GROUP_NAME, agSettings.hashName);
-            var schema = singleGroup.GetSchema<BundledAssetGroupSchema>();
-            schema.BundleMode = BundledAssetGroupSchema.BundlePackingMode.PackSeparately;
-            CreateOrMoveEntry(settings, singleGroup, singleGroupData);
+            var singleGroup = CreateSharedGroup(settings, SINGLE_GROUP_NAME, agSettings.hashName,
+                BundledAssetGroupSchema.BundlePackingMode.PackSeparately);
+            if (singleGroup == null)
+                throw new System.NullReferenceException("Failed to create the group: " + SINGLE_GROUP_NAME);
 
             // assign to groups
             var sharedGroupCount = settings.groups.FindAll(group => group.name.Contains(SHARED_GROUP_NAME)).Count;
@@ -218,7 +186,8 @@ namespace AddrAuditor.Editor
                 if (groupParam.refAssets.Count > 1)
                 {
                     var name = string.Format(groupParam.name, sharedGroupCount);
-                    group = CreateSharedGroup(settings, name, agSettings.hashName);
+                    group = CreateSharedGroup(settings, name, agSettings.hashName,
+                        BundledAssetGroupSchema.BundlePackingMode.PackTogether);
                     sharedGroupCount++;
                 }
 
@@ -240,7 +209,8 @@ namespace AddrAuditor.Editor
         /// <summary>
         /// create addressables group for shared assets
         /// </summary>
-        static AddressableAssetGroup CreateSharedGroup(AddressableAssetSettings settings, string groupName, bool useHashName)
+        static AddressableAssetGroup CreateSharedGroup(AddressableAssetSettings settings, string groupName, bool useHashName,
+            BundledAssetGroupSchema.BundlePackingMode packingMode)
         {
             // Shared-Single and Shared-Shader group are the unique group
             var group = settings.FindGroup(groupName);
@@ -269,7 +239,8 @@ namespace AddrAuditor.Editor
             schema.IncludeGUIDInCatalog = false;
             schema.IncludeLabelsInCatalog = false;
 
-            schema.BundleMode = BundledAssetGroupSchema.BundlePackingMode.PackTogether;
+            // NOTE: set the final mode directly, each setter posts a modification event if the value changes
+            schema.BundleMode = packingMode;
             schema.AssetLoadMode = UnityEngine.ResourceManagement.ResourceProviders.AssetLoadMode.AllPackedAssetsAndDependencies;
             schema.InternalBundleIdMode = BundledAssetGroupSchema.BundleInternalIdMode.GroupGuid;
             schema.InternalIdNamingMode = BundledAssetGroupSchema.AssetNamingMode.Dynamic;
@@ -302,7 +273,7 @@ namespace AddrAuditor.Editor
         /// <param name="agSettings">Auto Grouping Settings by AddrAuditor</param>
         /// <param name="excludeExplicitAsset">whether to include the explicit asset(Addressable Entry) in the return value</param>
         /// <returns>the data about included assets and that list of SpriteAtlas</returns>
-        public static (List<RefAssetData>, List<SpriteAtlasData>) CollectReferencedAssetInfo(AddressableAssetSettings settings, 
+        public static (List<RefAssetData>, List<SpriteAtlasData>) CollectReferencedAssetInfo(AddressableAssetSettings settings,
                                                                                       AddrAutoGroupingSettings agSettings,
                                                                                       bool excludeExplicitAsset)
         {
@@ -312,131 +283,117 @@ namespace AddrAuditor.Editor
                 return (null, null);
             }
 
-            var allBundleInputDefs = new List<AssetBundleBuild>();
-            var bundleToAssetGroup = new Dictionary<string, string>();
-            AddrUtility.CalculateInputDefinitions(settings, allBundleInputDefs, bundleToAssetGroup);
-            var aaContext = AddrUtility.GetBuildContext(settings, bundleToAssetGroup);
-            var extractData = new ExtractDataTask();
-            var exitCode = AddrUtility.RefleshBuild(settings, allBundleInputDefs, extractData, aaContext);
+            var exitCode = AddrUtility.CalculateBundleWriteData(settings, out var aaContext, out var extractData, out _);
             if (exitCode < ReturnCode.Success)
-            {
-                Debug.LogError($"Analyze build failed. {exitCode}");
                 return (null, null);
-            }
-            
+
+            var bundleToAssetGroup = aaContext.bundleToAssetGroup;
             var writeData = extractData.WriteData;
-            var validImplicitGuids = new Dictionary<GUID, RefAssetData>();
+            var validImplicitGuids = new Dictionary<GUID, (RefAssetData refAsset, HashSet<string> bundles)>();
             var atlases = new List<SpriteAtlasData>();
-            var hasGroupingSettings = agSettings != null; 
+            var hasGroupingSettings = agSettings != null;
+
+            // the same assets appear in every bundle that refers them, so cache the results per asset/object
+            var pathCache = new Dictionary<GUID, (string path, bool valid)>();
+            var objectCache = new Dictionary<ObjectIdentifier, (Object instance, bool isSubAsset)>();
 
             foreach (var fileToBundle in writeData.FileToBundle)
             {
-                if (writeData.FileToObjects.TryGetValue(fileToBundle.Key, out var objectIdList))
+                if (!writeData.FileToObjects.TryGetValue(fileToBundle.Key, out var objectIdList))
+                    continue;
+
+                // find the group
+                var bundle = fileToBundle.Value;
+                // cannot found the Built-in Shaders group
+                if (!bundleToAssetGroup.TryGetValue(bundle, out var groupGuid))
+                    continue;
+                var isResident = hasGroupingSettings && (groupGuid == agSettings.residentGroupGUID);
+
+                // there are multiple references from the same file
+                foreach (var objectId in objectIdList)
                 {
-                    // there are multiple references from the same file 
-                    foreach (var objectId in objectIdList)
+                    var guid = objectId.guid;
+
+                    // ignore explicit assets that have been registered in any groups
+                    if (excludeExplicitAsset && writeData.AssetToFiles.ContainsKey(guid))
+                        continue;
+
+                    if (!pathCache.TryGetValue(guid, out var pathInfo))
                     {
-                        var guid = objectId.guid;
+                        var assetPath = AssetDatabase.GUIDToAssetPath(guid);
+                        pathInfo = (assetPath, AddrUtility.IsPathValidForEntry(assetPath));
+                        pathCache.Add(guid, pathInfo);
+                    }
 
-                        // ignore explicit assets that have been registered in any groups
-                        if (excludeExplicitAsset && writeData.AssetToFiles.ContainsKey(guid))
-                            continue;
+                    // allow to entry Resources assets
+                    // TextMeshPro has a legacy structure that depends on Resources
+                    if (!pathInfo.valid)
+                        continue;
+                    var path = pathInfo.path;
+                    var isResources = path.Contains("/Resources/");
+                    if (isResources && hasGroupingSettings)
+                    {
+                        var selectedGroup = settings.FindGroup(g => g.Guid == groupGuid);
+                        Debug.LogWarning($"Resources Asset is duplicated. - {path} / Group : {selectedGroup.name}");
+                    }
 
-                        // find the group
-                        var bundle = fileToBundle.Value;
-                        // cannot found the Built-in Shaders group
-                        if (!bundleToAssetGroup.TryGetValue(bundle, out var groupGuid))
-                            continue;
-                        var path = AssetDatabase.GUIDToAssetPath(guid);
+                    // there are assets that have no type (PostProcessingVolume, Playable, ...)
+                    if (!objectCache.TryGetValue(objectId, out var objectInfo))
+                    {
+                        var obj = ObjectIdentifier.ToObject(objectId);
+                        objectInfo = (obj, obj != null && AssetDatabase.IsSubAsset(obj));
+                        objectCache.Add(objectId, objectInfo);
+                    }
+                    var instance = objectInfo.instance;
+                    var type = instance != null ? instance.GetType() : null;
 
-                        // allow to entry Resources assets
-                        // TextMeshPro has a legacy structure that depends on Resources
-                        if (!AddrUtility.IsPathValidForEntry(path))
-                            continue;
-                        var isResources = path.Contains("/Resources/"); 
-                        if (isResources)
+                    // Material assets are very tiny, to reduce excessive bundle dependencies by allowing duplication
+                    if (hasGroupingSettings && agSettings.allowDuplicatedMaterial && type == typeof(Material))
+                        continue;
+
+                    var isSubAsset = objectInfo.isSubAsset;
+
+                    if (validImplicitGuids.TryGetValue(guid, out var found))
+                    {
+                        var refAsset = found.refAsset;
+                        if (type != null && !refAsset.usedSubAssetTypes.Contains(type))
+                            refAsset.usedSubAssetTypes.Add(type);
+                        if (found.bundles.Add(bundle))
+                            refAsset.bundles.Add(bundle);
+                        refAsset.isSubAsset &= isSubAsset;
+                        refAsset.isResident |= isResident;
+                    }
+                    else
+                    {
+                        var refAsset = new RefAssetData()
                         {
-                            if (hasGroupingSettings)
+                            guid = guid.ToString(),
+                            path = path,
+                            isSubAsset = isSubAsset,
+                            isResident = isResident,
+                            isResources = isResources,
+                            usedSubAssetTypes = new List<System.Type>() { type },
+                            bundles = new List<string>() { bundle },
+                        };
+                        validImplicitGuids.Add(guid, (refAsset, new HashSet<string>() { bundle }));
+
+                        // this is necessary to determine whether Sprite belongs to SpriteAtlas which is included in Addressable
+                        if (type == typeof(SpriteAtlas))
+                        {
+                            var atlasParam = new SpriteAtlasData()
                             {
-                                var selectedGroup = settings.FindGroup(g => g.Guid == groupGuid);
-                                Debug.LogWarning($"Resources Asset is duplicated. - {path} / Group : {selectedGroup.name}");
-                            }
-                        }
-
-                        // // ignore Lightmap assets because it depends on Scene asset
-                        // if (path.Contains("Lightmap-"))
-                        //     continue;
-
-                        // there are assets that have no type (PostProcessingVolume, Playable, ...)
-                        var instance = ObjectIdentifier.ToObject(objectId);
-                        var type = instance != null ? instance.GetType() : null;
-
-                        // Material assets are very tiny, to reduce excessive bundle dependencies by allowing duplication
-                        if (hasGroupingSettings && agSettings.allowDuplicatedMaterial)
-                        {
-                            if (type == typeof(Material))
-                                continue;
-                        }
-
-                        var isSubAsset = instance != null && AssetDatabase.IsSubAsset(instance);
-                        var isResident = hasGroupingSettings && (groupGuid == agSettings.residentGroupGUID);
-
-                        if (validImplicitGuids.TryGetValue(guid, out var refAsset))
-                        {
-                            if (type != null && !refAsset.usedSubAssetTypes.Contains(type))
-                                refAsset.usedSubAssetTypes.Add(type);
-                            if (!refAsset.bundles.Contains(bundle))
-                                refAsset.bundles.Add(bundle);
-                            refAsset.isSubAsset &= isSubAsset;
-                            refAsset.isResident |= isResident;
-                        }
-                        else
-                        {
-                            // // get the texture size before compression
-                            // var fullPath = "";
-                            // if (path.Contains("Packages/"))
-                            //     fullPath = System.IO.Path.GetFullPath(path);
-                            // else
-                            //     fullPath = System.IO.Path.Combine(Application.dataPath.Replace("/Assets", ""),
-                            //         path);
-                            // var fileSize = 0L;
-                            // if (instance is Texture)
-                            //     fileSize = this.GetStorageMemorySizeLong(instance as Texture);
-                            // if (fileSize == 0L)
-                            //     fileSize = new System.IO.FileInfo(fullPath).Length;
-
-                            refAsset = new RefAssetData()
-                            {
-                                guid = guid.ToString(),
-                                path = path,
-                                isSubAsset = isSubAsset,
                                 isResident = isResident,
-                                isResources = isResources,
-                                usedSubAssetTypes = new List<System.Type>() { type },
-                                bundles = new List<string>() { bundle },
-                                //fileSize = fileSize,
+                                instance = instance as SpriteAtlas,
                             };
-                            validImplicitGuids.Add(guid, refAsset);
-
-                            // this is necessary to determine whether Sprite belongs to SpriteAtlas which is included in Addressable
-                            if (type == typeof(SpriteAtlas))
-                            {
-                                var atlasParam = new SpriteAtlasData()
-                                {
-                                    isResident = isResident,
-                                    instance = instance as SpriteAtlas,
-                                };
-                                atlases.Add(atlasParam);
-                            }
+                            atlases.Add(atlasParam);
                         }
-
-                        // for test
-                        //Debug.Log($"{implicitPath} / Entry : {explicitPath} / Group : {selectedGroup.name}");
                     }
                 }
             }
 
-            var implicitParams = new List<RefAssetData>(validImplicitGuids.Values);
+            var implicitParams = new List<RefAssetData>(validImplicitGuids.Count);
+            foreach (var found in validImplicitGuids.Values)
+                implicitParams.Add(found.refAsset);
             return (implicitParams, atlases);
         }
     }

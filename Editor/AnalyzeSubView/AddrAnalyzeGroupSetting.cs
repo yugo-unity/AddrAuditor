@@ -149,11 +149,11 @@ namespace AddrAuditor.Editor
                     this.recommendItems.Add(new RecommendItem(group, ANALYZED_ITEM.BUNDLE_NAMING));
                 if (schema.IncludeAddressInCatalog && schema.IncludeGUIDInCatalog)
                     this.recommendItems.Add(new RecommendItem(group, ANALYZED_ITEM.INCLUDE_IN_CATALOG));
-                foreach (var entry in group.entries)
+                if (schema.InternalIdNamingMode == BundledAssetGroupSchema.AssetNamingMode.Dynamic)
                 {
-                    if (AssetDatabase.GetMainAssetTypeAtPath(entry.AssetPath) == typeof(SceneAsset))
+                    foreach (var entry in group.entries)
                     {
-                        if (schema.InternalIdNamingMode == BundledAssetGroupSchema.AssetNamingMode.Dynamic)
+                        if (AssetDatabase.GetMainAssetTypeAtPath(entry.AssetPath) == typeof(SceneAsset))
                         {
                             this.recommendItems.Add(new RecommendItem(group, ANALYZED_ITEM.INTERNAL_ASSET_NAMING));
                             break;

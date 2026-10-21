@@ -73,6 +73,7 @@ namespace AddrAuditor.Editor
                         this.analyzeCache.explicitEntries = null;
                         this.analyzeCache.spriteAtlases = null;
                         this.analyzeCache.refEntryDic.Clear();
+                        this.analyzeCache.dependencyDic.Clear();
                         this.CreateSubViews();
                         this.UpdateSubView(this.currentCategory);
                     };

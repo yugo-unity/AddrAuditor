@@ -17,17 +17,9 @@ namespace AddrAuditor.Editor
         {
             var settings = AddressableAssetSettingsDefaultObject.Settings;
 
-            var allBundleInputDefs = new List<AssetBundleBuild>();
-            var bundleToAssetGroup = new Dictionary<string, string>();
-            AddrUtility.CalculateInputDefinitions(settings, allBundleInputDefs, bundleToAssetGroup);
-            var aaContext = AddrUtility.GetBuildContext(settings, bundleToAssetGroup);
-            var extractData = new ExtractDataTask();
-            var exitCode = AddrUtility.RefleshBuild(settings, allBundleInputDefs, extractData, aaContext);
+            var exitCode = AddrUtility.CalculateBundleWriteData(settings, out var aaContext, out var extractData, out _);
             if (exitCode < ReturnCode.Success)
-            {
-                Debug.LogError($"Analyze build failed. {exitCode}");
                 return;
-            }
 
             foreach (var pair in extractData.WriteData.FileToBundle)
             {

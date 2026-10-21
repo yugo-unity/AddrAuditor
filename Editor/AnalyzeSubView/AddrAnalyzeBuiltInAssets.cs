@@ -85,20 +85,11 @@ namespace AddrAuditor.Editor
                 if (!scene.enabled)
                     continue;
                 
-                var dep = AssetDatabase.GetDependencies(scene.path, true);
-                var dupImplicit = cache.refAssets.Where(
-                    (param) =>
-                    {
-                        // TODO: test
-                        if (param.path.Contains("wake_up"))
-                        {
-                            int hoge = 0;
-                            ++hoge;
-                        }
-                        return dep.Contains(param.path);
-                    }).ToArray();
-                foreach (var dup in dupImplicit)
+                var dep = new HashSet<string>(AssetDatabase.GetDependencies(scene.path, true));
+                foreach (var dup in cache.refAssets)
                 {
+                    if (!dep.Contains(dup.path))
+                        continue;
                     this.duplications.Add(new DuplicateAsset()
                     {
                         refAssetData = dup,
@@ -106,20 +97,17 @@ namespace AddrAuditor.Editor
                     });
                 }
             }
-            
+
             // 2. Resourcesに含まれているか
-            if (cache != null)
+            foreach (var param in cache.refAssets)
             {
-                foreach (var param in cache.refAssets)
+                if (!param.isResources)
+                    continue;
+                this.duplications.Add(new DuplicateAsset()
                 {
-                    if (!param.path.Contains("/Resources/"))
-                        continue;
-                    this.duplications.Add(new DuplicateAsset()
-                    {
-                        refAssetData = param,
-                        builtInAsset = "Resources",
-                    });
-                }
+                    refAssetData = param,
+                    builtInAsset = "Resources",
+                });
             }
             
             // 3. GraphicsSettings/Always included shader & Preloaded Shaders に含まれているか

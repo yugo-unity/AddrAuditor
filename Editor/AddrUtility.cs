@@ -49,14 +49,6 @@ namespace AddrAuditor.Editor
                     Debug.LogError("Failed Reflection - IsPathValidForEntry ");
                 }
             }
-            // // 圧縮されたテクスチャのファイルサイズ取得
-            // var editorAssembly = typeof(TextureImporter).Assembly;
-            // var utilType = editorAssembly.GetType("UnityEditor.TextureUtil");
-            // var utilMethod = utilType.GetMethod("GetStorageMemorySizeLong",
-            //     BindingFlags.Static | BindingFlags.Public, null, new System.Type[] { typeof(Texture) }, null);
-            // this.GetStorageMemorySizeLong =
-            //     System.Delegate.CreateDelegate(typeof(GetMemorySizeLongCallback), utilMethod) as
-            //         GetMemorySizeLongCallback;
         }
 
         public static void CreateHelpBox(VisualElement root, string text)
@@ -118,18 +110,23 @@ namespace AddrAuditor.Editor
         }
         #endregion
 
-        // public static ReturnCode CalculateBundleWriteData(out AddressableAssetsBuildContext aaContext,
-        //     out ExtractDataTask extractData, out List<AssetBundleBuild> allBundleInputDefs)
-        // {
-        //     var settings = AddressableAssetSettingsDefaultObject.Settings;
-        //     allBundleInputDefs = new List<AssetBundleBuild>();
-        //     var bundleToAssetGroup = new Dictionary<string, string>();
-        //     
-        //     CalculateInputDefinitions(settings, allBundleInputDefs, bundleToAssetGroup);
-        //     aaContext = GetBuildContext(settings, bundleToAssetGroup);
-        //     extractData = new ExtractDataTask();
-        //     return RefleshBuild(settings, allBundleInputDefs, extractData, aaContext);
-        // }
+        /// <summary>
+        /// run the analysis build and get the write data (logs an error if failed)
+        /// </summary>
+        public static ReturnCode CalculateBundleWriteData(AddressableAssetSettings settings,
+            out AddressableAssetsBuildContext aaContext, out ExtractDataTask extractData,
+            out List<AssetBundleBuild> allBundleInputDefs)
+        {
+            allBundleInputDefs = new List<AssetBundleBuild>();
+            var bundleToAssetGroup = new Dictionary<string, string>();
+            CalculateInputDefinitions(settings, allBundleInputDefs, bundleToAssetGroup);
+            aaContext = GetBuildContext(settings, bundleToAssetGroup);
+            extractData = new ExtractDataTask();
+            var exitCode = RefleshBuild(settings, allBundleInputDefs, extractData, aaContext);
+            if (exitCode < ReturnCode.Success)
+                Debug.LogError($"Analyze build failed. {exitCode}");
+            return exitCode;
+        }
 
         static AssetBundleBuild CreateUniqueBundle(AssetBundleBuild bid, Dictionary<string, string> bundleToAssetGroup)
         {
@@ -201,8 +198,6 @@ namespace AddrAuditor.Editor
                 Settings = settings,
                 runtimeData = runtimeData,
                 bundleToAssetGroup = bundleToAssetGroup,
-                //locations = m_Locations,
-                //providerTypes = new HashSet<System.Type>(),
                 assetEntries = new (), // NOTE: for GenerateLocationListsTask
                 assetGroupToBundles = new ()
             };
@@ -218,12 +213,10 @@ namespace AddrAuditor.Editor
                 buildTarget,
                 buildTargetGroup, settings.buildSettings.bundleBuildPath);
             // no need prefix because only for analysis
-            //var builtinBundleName = GetBuiltInBundleNamePrefix(aaContext) + $"{BuildScriptBase.BuiltInBundleBaseName}.bundle";
             var builtinBundleName = $"{BuildScriptBase.BuiltInBundleBaseName}.bundle";
             
             var buildTasks = new List<IBuildTask>();
             // Setup
-            //buildTasks.Add(new SwitchToBuildPlatform());
             buildTasks.Add(new RebuildSpriteAtlasCache()); // NOTE: individual Sprites are included if not create SpriteAtlas
             // Dependency
             buildTasks.Add(new CalculateSceneDependencyData());
@@ -246,7 +239,6 @@ namespace AddrAuditor.Editor
 
         #region SORTING
         
-        static readonly System.Text.RegularExpressions.Regex NUM_REGEX = new System.Text.RegularExpressions.Regex(@"[^0-9]");
         public static string defaultGroupGuid = "";
 
         /// <summary>
@@ -254,40 +246,19 @@ namespace AddrAuditor.Editor
         /// </summary>
         public static int CompareGroup(AddressableAssetGroup a, AddressableAssetGroup b)
         {
-            // Legacy...
-            // if (a.name == "Built In Data")
-            //     return -1;
-            // if (b.name == "Built In Data")
-            //     return 1;
-            
-            //if (a.IsDefaultGroup()) // 内部でソート中のgroupsを毎回検索するのでおかしくなる
+            // NOTE: IsDefaultGroup()は内部でソート中のgroupsを毎回検索するのでおかしくなる
             if (a.Guid == defaultGroupGuid)
                 return -1;
-            //if (b.IsDefaultGroup())
             if (b.Guid == defaultGroupGuid)
                 return 1;
-            //if (a.ReadOnly && !b.ReadOnly)
-            //    return 1;
-            //if (!a.ReadOnly && b.ReadOnly)
-            //    return -1;
-            if (a.name[0] == '+' && b.name[0] != '+')
+            var nameA = a.name;
+            var nameB = b.name;
+            if (nameA[0] == '+' && nameB[0] != '+')
                 return 1;
-            if (a.name[0] != '+' && b.name[0] == '+')
+            if (nameA[0] != '+' && nameB[0] == '+')
                 return -1;
 
-            var ret = string.CompareOrdinal(a.name, b.name);
-            // 桁数の違う数字を揃える
-            var regA = NUM_REGEX.Replace(a.name, "");
-            var regB = NUM_REGEX.Replace(b.name, "");
-            if ((regA.Length > 0 && regB.Length > 0) && regA.Length != regB.Length)
-            {
-                if (ret > 0 && regA.Length < regB.Length)
-                    return -1;
-                else if (ret < 0 && regA.Length > regB.Length)
-                    return 1;
-            }
-
-            return ret;
+            return CompareAlphanumeric(nameA, nameB);
         }
         /// <summary>
         /// Addressable Groupのalphanumericソート
@@ -299,19 +270,39 @@ namespace AddrAuditor.Editor
             if (b.Contains(UNITY_BUILTIN_SHADERS))
                 return 1;
 
+            return CompareAlphanumeric(a, b);
+        }
+
+        /// <summary>
+        /// ordinal comparison that aligns numbers with different digits
+        /// </summary>
+        public static int CompareAlphanumeric(string a, string b)
+        {
             var ret = string.CompareOrdinal(a, b);
             // 桁数の違う数字を揃える
-            var regA = NUM_REGEX.Replace(a, string.Empty);
-            var regB = NUM_REGEX.Replace(b, string.Empty);
-            if ((regA.Length > 0 && regB.Length > 0) && regA.Length != regB.Length)
+            // NOTE: count only ASCII digits (char.IsDigit also counts Unicode digits)
+            var digitsA = CountDigits(a);
+            var digitsB = CountDigits(b);
+            if ((digitsA > 0 && digitsB > 0) && digitsA != digitsB)
             {
-                if (ret > 0 && regA.Length < regB.Length)
+                if (ret > 0 && digitsA < digitsB)
                     return -1;
-                else if (ret < 0 && regA.Length > regB.Length)
+                else if (ret < 0 && digitsA > digitsB)
                     return 1;
             }
 
             return ret;
+        }
+
+        static int CountDigits(string s)
+        {
+            var count = 0;
+            foreach (var c in s)
+            {
+                if (c >= '0' && c <= '9')
+                    ++count;
+            }
+            return count;
         }
         
         #endregion

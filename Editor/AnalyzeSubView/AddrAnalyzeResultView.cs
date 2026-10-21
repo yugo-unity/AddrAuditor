@@ -13,6 +13,7 @@ namespace AddrAuditor.Editor
         public List<AddressableAssetEntry> explicitEntries;
         public List<SpriteAtlasData> spriteAtlases;
         public readonly Dictionary<string, List<RefEntry>> refEntryDic = new ();
+        public readonly Dictionary<string, HashSet<string>> dependencyDic = new (); // asset path -> recursive dependency paths
     }
 
     internal class RefEntry
@@ -33,6 +34,7 @@ namespace AddrAuditor.Editor
     internal abstract class ResultView
     {
         protected const float REF_VIEW_DETAIL_HEIGHT = 160f;
+        protected const int PROGRESS_INTERVAL_MASK = 63; // update progress bar every 64 items
         public VisualElement rootElement { get; private set; }
         public virtual bool requireAnalyzeCache => false;
 
@@ -91,46 +93,39 @@ namespace AddrAuditor.Editor
             // Textures that is included in SpriteAtlas only referenced as Sprites are treated as SpriteAtlas
             if (isSpriteInAtlas)
             {
-                var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(refAsset.path);
-                foreach (var atlas in analyzeCache.spriteAtlases)
+                var atlas = AddrAutoGrouping.FindPackingAtlas(refAsset, analyzeCache.spriteAtlases);
+                if (atlas != null)
+                    refAssetPath = AssetDatabase.GetAssetPath(atlas.instance);
+            }
+
+            // the dependencies are cached until the analyze cache is cleared
+            bool DependsOn(string path)
+            {
+                if (!analyzeCache.dependencyDic.TryGetValue(path, out var dependencyPaths))
                 {
-                    if (atlas.instance.CanBindTo(sprite))
-                    {
-                        refAssetPath = AssetDatabase.GetAssetPath(atlas.instance);
-                        break;
-                    }
+                    dependencyPaths = new HashSet<string>(AssetDatabase.GetDependencies(path, true));
+                    analyzeCache.dependencyDic.Add(path, dependencyPaths);
                 }
+                return dependencyPaths.Contains(refAssetPath);
             }
 
             var entryCount = analyzeCache.explicitEntries.Count;
             for (var i = 0; i < entryCount; ++i)
             {
                 var entry = analyzeCache.explicitEntries[i];
-                
-                EditorUtility.DisplayCancelableProgressBar("Searching Referring Entries...", refAsset.path, (float)i/entryCount);
-                //var path = AssetDatabase.GUIDToAssetPath(entry.guid);
 
-                static bool AddReferencedDependencies(string refAssetPath, string path)
-                {
-                    var dependencyPaths = AssetDatabase.GetDependencies(path, true);
-                    foreach (var depPath in dependencyPaths)
-                    {
-                        if (depPath != refAssetPath)
-                            continue;
-                        return true;
-                    }
+                if ((i & PROGRESS_INTERVAL_MASK) == 0)
+                    EditorUtility.DisplayCancelableProgressBar("Searching Referring Entries...", refAsset.path, (float)i/entryCount);
 
-                    return false;
-                }
                 if (entry.IsFolder)
                 {
                     foreach (var asset in entry.SubAssets)
-                        if (AddReferencedDependencies(refAssetPath, asset.AssetPath))
+                        if (DependsOn(asset.AssetPath))
                             ret.Add(new RefEntry(entry.parentGroup.name, asset.AssetPath));
                 }
                 else
                 {
-                    if (AddReferencedDependencies(refAssetPath, entry.AssetPath))
+                    if (DependsOn(entry.AssetPath))
                         ret.Add(new RefEntry(entry.parentGroup.name, entry.AssetPath));
                 }
             }
@@ -152,24 +147,7 @@ namespace AddrAuditor.Editor
         }
         
         // sort by alphanumeric
-        static readonly System.Text.RegularExpressions.Regex NUM_REGEX = new (@"[^0-9]");
-        static int CompareName(string a, string b)
-        {
-            var ret = string.CompareOrdinal(a, b);
-            // align numbers that has different digits
-            var regA = NUM_REGEX.Replace(a, string.Empty);
-            var regB = NUM_REGEX.Replace(b, string.Empty);
-            if ((regA.Length > 0 && regB.Length > 0) && regA.Length != regB.Length)
-            {
-                if (ret > 0 && regA.Length < regB.Length)
-                    return -1;
-                else if (ret < 0 && regA.Length > regB.Length)
-                    return 1;
-            }
-
-            return ret;
-        }
-        static int CompareName(RefAssetData a, RefAssetData b) => CompareName(a.path, b.path);
-        static int CompareName(RefEntry a, RefEntry b) => CompareName(a.assetPath, b.assetPath);
+        static int CompareName(RefAssetData a, RefAssetData b) => AddrUtility.CompareAlphanumeric(a.path, b.path);
+        static int CompareName(RefEntry a, RefEntry b) => AddrUtility.CompareAlphanumeric(a.assetPath, b.assetPath);
     }
 }
