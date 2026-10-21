@@ -38,8 +38,7 @@ namespace AddrAuditor.Editor
         public AddressableAssetsBuildContext context;
         public ExtractDataTask extractData;
         public List<AssetBundleBuild> allBundleInputDefs { get; private set; }
-
-        public delegate bool IsPathCallback(string path);
+        readonly Dictionary<string, AssetBundleBuild> inputDefMap = new(); // bundle name -> input definition
 
         public void Execute()
         {
@@ -50,6 +49,9 @@ namespace AddrAuditor.Editor
                 // NOTE: keep the context even if failed (no retry)
                 AddrUtility.CalculateBundleWriteData(settings, out this.context, out this.extractData, out var inputDefs);
                 this.allBundleInputDefs = inputDefs;
+                this.inputDefMap.Clear();
+                foreach (var def in inputDefs)
+                    this.inputDefMap[def.assetBundleName] = def;
             }
         }
 
@@ -58,6 +60,21 @@ namespace AddrAuditor.Editor
             this.context = null;
             this.extractData = null;
             this.allBundleInputDefs = null;
+            this.inputDefMap.Clear();
+        }
+
+        /// <summary>
+        /// find the input definition of a bundle in the build context
+        /// </summary>
+        /// <param name="bundleName">bundle名（ハッシュ値もついてる）</param>
+        /// <param name="inputDef">input definition</param>
+        public bool TryGetInputDefinition(string bundleName, out AssetBundleBuild inputDef)
+        {
+            if (this.inputDefMap.TryGetValue(bundleName, out inputDef))
+                return true;
+            // AddHashToBundleNameTask renames bundles to "{name}_{hash}" if UniqueBundleIds is enabled
+            var separator = bundleName.LastIndexOf('_');
+            return separator > 0 && this.inputDefMap.TryGetValue(bundleName.Substring(0, separator), out inputDef);
         }
 
         /// <summary>
@@ -67,7 +84,8 @@ namespace AddrAuditor.Editor
         /// <param name="selectedEntries">GUIで設定したエントリ</param>
         public bool IsHitSelectedEntry(string bundleName, List<AddressableAssetEntry> selectedEntries)
         {
-            var bundleInfo = this.allBundleInputDefs.Find(val => val.assetBundleName == bundleName);
+            if (!this.TryGetInputDefinition(bundleName, out var bundleInfo))
+                return false;
             foreach (var assetName in bundleInfo.assetNames)
             {
                 foreach (var selectedEntry in selectedEntries)

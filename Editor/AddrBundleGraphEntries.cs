@@ -39,7 +39,8 @@ namespace AddrAuditor.Editor
             }
 
             // 内容物登録
-            var info = rule.allBundleInputDefs.Find((info) => info.assetBundleName == node.bundleName);
+            if (!rule.TryGetInputDefinition(node.bundleName, out var info))
+                return;
 
             foreach (var assetName in info.assetNames)
             {
