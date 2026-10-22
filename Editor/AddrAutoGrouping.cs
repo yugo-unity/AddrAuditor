@@ -296,6 +296,8 @@ namespace AddrAuditor.Editor
             // the same assets appear in every bundle that refers them, so cache the results per asset/object
             var pathCache = new Dictionary<GUID, (string path, bool valid)>();
             var objectCache = new Dictionary<ObjectIdentifier, (Object instance, bool isSubAsset)>();
+            var checkedExplicitGuids = new HashSet<GUID>();
+            var residentsGroup = settings.FindGroup(RESIDENT_GROUP_NAME);
 
             foreach (var fileToBundle in writeData.FileToBundle)
             {
@@ -316,7 +318,23 @@ namespace AddrAuditor.Editor
 
                     // ignore explicit assets that have been registered in any groups
                     if (excludeExplicitAsset && writeData.AssetToFiles.ContainsKey(guid))
+                    {
+                        // SpriteAtlas that has been registered (e.g. moved to the shared group in the previous process)
+                        // is still necessary to determine whether Sprite belongs to SpriteAtlas
+                        if (checkedExplicitGuids.Add(guid))
+                        {
+                            var atlasPath = AssetDatabase.GUIDToAssetPath(guid);
+                            if (AssetDatabase.GetMainAssetTypeAtPath(atlasPath) == typeof(SpriteAtlas))
+                            {
+                                atlases.Add(new SpriteAtlasData()
+                                {
+                                    isResident = isResident || (residentsGroup != null && groupGuid == residentsGroup.Guid),
+                                    instance = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(atlasPath),
+                                });
+                            }
+                        }
                         continue;
+                    }
 
                     if (!pathCache.TryGetValue(guid, out var pathInfo))
                     {
