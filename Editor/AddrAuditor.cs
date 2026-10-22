@@ -183,13 +183,13 @@ namespace AddrAuditor.Editor
             });
 
             toggle = AddrUtility.CreateToggle(box,
-                "Single Analysis Build (experimental)",
-                "[実験的機能] 解析ビルドを1回だけ行い、グループ移動後のbundle構成をシミュレートして重複を解決します。結果は従来の再帰処理と同じになるよう設計されています。\n\n" +
-                "[experimental] Run the analysis build only once and simulate the bundle layout after grouping, instead of re-running the build recursively.",
-                groupingSettings.singleAnalysisBuild);
+                "Fast Analysis (experimental)",
+                "[実験的機能] 解析ビルドを1回だけ行い、グループ移動後のbundle構成をシミュレートして重複を解決します。これにより依存関係の解析時間が短縮できます。\n\n" +
+                "[experimental] Run the analysis build only once and simulate the bundle layout after grouping to resolve duplicated assets. This reduces the time to analyze dependencies.",
+                groupingSettings.fastAnalysis);
             toggle.RegisterValueChangedCallback((evt) =>
             {
-                groupingSettings.singleAnalysisBuild = evt.newValue;
+                groupingSettings.fastAnalysis = evt.newValue;
                 EditorUtility.SetDirty(groupingSettings);
             });
             
@@ -232,7 +232,7 @@ namespace AddrAuditor.Editor
                 settings.ActivePlayerDataBuilderIndex = 0;
                 
                 var completed = false;
-                if (groupingSettings.singleAnalysisBuild)
+                if (groupingSettings.fastAnalysis)
                 {
                     completed = AddrAutoGrouping.ExecuteSinglePass(groupingSettings, RECURSIVE_COUNT);
                 }

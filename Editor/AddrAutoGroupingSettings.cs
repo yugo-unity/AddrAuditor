@@ -9,7 +9,7 @@ namespace AddrAuditor.Editor
     {
         public bool shaderGroup = false;
         public bool allowDuplicatedMaterial = true;
-        public bool singleAnalysisBuild = false; // [experimental] simulate the layout instead of re-running the analysis build
+        public bool fastAnalysis = false; // [experimental] simulate the layout instead of re-running the analysis build
         //public int singleThreshold = 0;
         public string residentGroupGUID;
         
