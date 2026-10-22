@@ -102,6 +102,51 @@ namespace AddrAuditor.Editor
             if (refAssets == null)
                 return false;
 
+            return ApplyGrouping(settings, agSettings, refAssets, atlases, null);
+        }
+
+        /// <summary>
+        /// [experimental] resolve duplicated assets with only one analysis build
+        /// the bundle layout after grouping is simulated instead of running the analysis build again
+        /// </summary>
+        /// <param name="agSettings">settings for grouping automatically</param>
+        /// <param name="maxCount">max count of grouping (same as the recursive count)</param>
+        /// <returns>whether all duplicated assets are resolved within the max count</returns>
+        public static bool ExecuteSinglePass(AddrAutoGroupingSettings agSettings, int maxCount)
+        {
+            var settings = AddressableAssetSettingsDefaultObject.Settings;
+            if (!BuildUtility.CheckModifiedScenesAndAskToSave())
+            {
+                Debug.LogError("Cannot run Analyze with unsaved scenes");
+                return true;
+            }
+
+            var exitCode = AddrUtility.CalculateBundleWriteData(settings, out var aaContext, out var extractData, out _);
+            if (exitCode < ReturnCode.Success)
+                return true;
+
+            var simulator = new AddrAutoGroupingSimulator(settings, aaContext, extractData);
+            var movedAssets = new List<(GUID, AddressableAssetGroup)>();
+            for (var i = 0; i < maxCount; ++i)
+            {
+                var (refAssets, atlases) = CollectReferencedAssetInfo(settings, agSettings, true,
+                    simulator.EnumerateFiles(), simulator.BundleToAssetGroup, simulator.IsExplicitAsset);
+                movedAssets.Clear();
+                var continued = ApplyGrouping(settings, agSettings, refAssets, atlases, movedAssets);
+                if (!continued)
+                    return true;
+                simulator.AddExplicitAssets(movedAssets);
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// assign the duplicated assets to the shared groups
+        /// </summary>
+        /// <returns>whether any shared groups are created (it needs to process again)</returns>
+        static bool ApplyGrouping(AddressableAssetSettings settings, AddrAutoGroupingSettings agSettings,
+            List<RefAssetData> refAssets, List<SpriteAtlasData> atlases, List<(GUID, AddressableAssetGroup)> movedAssets)
+        {
             var sharedGroupDataList = new List<SharedGroupData>();
             // key: sorted names of referenced bundles (to find the group that has the same bundles)
             var sharedGroupDataMap = new Dictionary<string, SharedGroupData>();
@@ -191,7 +236,7 @@ namespace AddrAuditor.Editor
                     sharedGroupCount++;
                 }
 
-                CreateOrMoveEntry(settings, group, groupParam);
+                CreateOrMoveEntry(settings, group, groupParam, movedAssets);
             }
 
             // delete empty group
@@ -256,13 +301,15 @@ namespace AddrAuditor.Editor
         /// <summary>
         /// create Entry to specified group
         /// </summary>
-        static void CreateOrMoveEntry(AddressableAssetSettings settings, AddressableAssetGroup group, SharedGroupData groupData)
+        static void CreateOrMoveEntry(AddressableAssetSettings settings, AddressableAssetGroup group, SharedGroupData groupData,
+            List<(GUID, AddressableAssetGroup)> movedAssets)
         {
             foreach (var info in groupData.refAssets)
             {
                 var entry = settings.CreateOrMoveEntry(info.guid, group, false, false);
                 var addr = System.IO.Path.GetFileNameWithoutExtension(info.path);
                 entry.SetAddress(addr, false);
+                movedAssets?.Add((new GUID(info.guid), group));
             }
         }
 
@@ -287,8 +334,31 @@ namespace AddrAuditor.Editor
             if (exitCode < ReturnCode.Success)
                 return (null, null);
 
-            var bundleToAssetGroup = aaContext.bundleToAssetGroup;
             var writeData = extractData.WriteData;
+            return CollectReferencedAssetInfo(settings, agSettings, excludeExplicitAsset,
+                EnumerateFiles(writeData), aaContext.bundleToAssetGroup, writeData.AssetToFiles.ContainsKey);
+        }
+
+        static IEnumerable<(string bundle, List<ObjectIdentifier> objects)> EnumerateFiles(UnityEditor.Build.Pipeline.Interfaces.IBundleWriteData writeData)
+        {
+            foreach (var fileToBundle in writeData.FileToBundle)
+            {
+                if (writeData.FileToObjects.TryGetValue(fileToBundle.Key, out var objectIdList))
+                    yield return (fileToBundle.Value, objectIdList);
+            }
+        }
+
+        /// <summary>
+        /// find referenced assets from the objects of each file and get the info
+        /// </summary>
+        /// <param name="files">bundle name and objects of each file (in the order of the build)</param>
+        /// <param name="bundleToAssetGroup">bundle name to group GUID</param>
+        /// <param name="isExplicitAsset">whether the asset has been registered in any groups</param>
+        internal static (List<RefAssetData>, List<SpriteAtlasData>) CollectReferencedAssetInfo(AddressableAssetSettings settings,
+            AddrAutoGroupingSettings agSettings, bool excludeExplicitAsset,
+            IEnumerable<(string bundle, List<ObjectIdentifier> objects)> files,
+            Dictionary<string, string> bundleToAssetGroup, System.Func<GUID, bool> isExplicitAsset)
+        {
             var validImplicitGuids = new Dictionary<GUID, (RefAssetData refAsset, HashSet<string> bundles)>();
             var atlases = new List<SpriteAtlasData>();
             var hasGroupingSettings = agSettings != null;
@@ -299,13 +369,9 @@ namespace AddrAuditor.Editor
             var checkedExplicitGuids = new HashSet<GUID>();
             var residentsGroup = settings.FindGroup(RESIDENT_GROUP_NAME);
 
-            foreach (var fileToBundle in writeData.FileToBundle)
+            foreach (var (bundle, objectIdList) in files)
             {
-                if (!writeData.FileToObjects.TryGetValue(fileToBundle.Key, out var objectIdList))
-                    continue;
-
                 // find the group
-                var bundle = fileToBundle.Value;
                 // cannot found the Built-in Shaders group
                 if (!bundleToAssetGroup.TryGetValue(bundle, out var groupGuid))
                     continue;
@@ -317,7 +383,7 @@ namespace AddrAuditor.Editor
                     var guid = objectId.guid;
 
                     // ignore explicit assets that have been registered in any groups
-                    if (excludeExplicitAsset && writeData.AssetToFiles.ContainsKey(guid))
+                    if (excludeExplicitAsset && isExplicitAsset(guid))
                     {
                         // SpriteAtlas that has been registered (e.g. moved to the shared group in the previous process)
                         // is still necessary to determine whether Sprite belongs to SpriteAtlas

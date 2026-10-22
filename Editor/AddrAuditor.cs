@@ -181,6 +181,17 @@ namespace AddrAuditor.Editor
                 groupingSettings.allowDuplicatedMaterial = evt.newValue;
                 EditorUtility.SetDirty(groupingSettings);
             });
+
+            toggle = AddrUtility.CreateToggle(box,
+                "Single Analysis Build (experimental)",
+                "[実験的機能] 解析ビルドを1回だけ行い、グループ移動後のbundle構成をシミュレートして重複を解決します。結果は従来の再帰処理と同じになるよう設計されています。\n\n" +
+                "[experimental] Run the analysis build only once and simulate the bundle layout after grouping, instead of re-running the build recursively.",
+                groupingSettings.singleAnalysisBuild);
+            toggle.RegisterValueChangedCallback((evt) =>
+            {
+                groupingSettings.singleAnalysisBuild = evt.newValue;
+                EditorUtility.SetDirty(groupingSettings);
+            });
             
             SelectResidentGroup(box, settings, groupingSettings);
             
@@ -221,13 +232,20 @@ namespace AddrAuditor.Editor
                 settings.ActivePlayerDataBuilderIndex = 0;
                 
                 var completed = false;
-                // recursive process for duplicated assets that duplicated assets have
-                for (var i = 0; i < RECURSIVE_COUNT; ++i)
+                if (groupingSettings.singleAnalysisBuild)
                 {
-                    if (AddrAutoGrouping.Execute(groupingSettings))
-                        continue;
-                    completed = true;
-                    break;
+                    completed = AddrAutoGrouping.ExecuteSinglePass(groupingSettings, RECURSIVE_COUNT);
+                }
+                else
+                {
+                    // recursive process for duplicated assets that duplicated assets have
+                    for (var i = 0; i < RECURSIVE_COUNT; ++i)
+                    {
+                        if (AddrAutoGrouping.Execute(groupingSettings))
+                            continue;
+                        completed = true;
+                        break;
+                    }
                 }
                 if (!completed)
                     Debug.LogError($"Canceled Auto-Grouping. Dependencies occurs more than the specified counts ({RECURSIVE_COUNT}).");
